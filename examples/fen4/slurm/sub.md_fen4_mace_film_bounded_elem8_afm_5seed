@@ -1,0 +1,49 @@
+#!/bin/bash
+# FeN4-O2 AFM MD with AIMD+opt+ZBL bounded element-aware MACE-FiLM checkpoint.
+
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH -N 1
+#SBATCH --gres=gpu:1
+#SBATCH -J fen4_bfilm_afm
+#SBATCH --partition=8v100
+#SBATCH --array=0-4
+#SBATCH -o /home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film/slurm-md-bfilm-afm-%A_%a.out
+
+set -euo pipefail
+
+export PYTHONPATH=/home/wuzhihong/software/mace:/home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film:${PYTHONPATH:-}
+export PYTHONUNBUFFERED=1
+export MPLCONFIGDIR=/tmp/ocp_mag_mplconfig_${USER:-wuzhihong}
+mkdir -p "${MPLCONFIGDIR}"
+
+PY=/home/wuzhihong/app/miniconda/envs/mace/bin/python
+WORK=/home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film
+RUN_MD=${WORK}/run_md_mace_film.py
+
+STRUCT=${WORK}/data/fen4_afm_aimd_secondframe.extxyz
+CKPT=${WORK}/checkpoints/fen4_mace_magmom_film_aimd10_opt_pes_zbl_bounded_elem8_v1/best.pt
+OUTROOT=${WORK}/md_outputs/fen4_mace_film_aimd10_opt_pes_zbl_bounded_elem8_v1_afm_secondframe_10ps_5seed
+SEEDS=(101 102 103 104 105)
+seed=${SEEDS[${SLURM_ARRAY_TASK_ID:-0}]}
+
+mkdir -p "${OUTROOT}"
+
+echo "Running FeN4-O2 AFM bounded elem8 MACE-FiLM MD task ${SLURM_ARRAY_TASK_ID:-0}, seed=${seed}"
+
+"${PY}" "${RUN_MD}" \
+  --structure "${STRUCT}" \
+  --structure-index 0 \
+  --checkpoint "${CKPT}" \
+  --device cuda \
+  --atomic-numbers 6 7 8 26 \
+  --temperature-k 50 \
+  --timestep-fs 1.0 \
+  --thermostat langevin \
+  --friction 0.02 \
+  --steps 10000 \
+  --loginterval 20 \
+  --velocity-seed "${seed}" \
+  --rollout-magmom \
+  --init-magmom-mode trajectory \
+  --output-dir "${OUTROOT}/afm_secondframe_seed_${seed}"

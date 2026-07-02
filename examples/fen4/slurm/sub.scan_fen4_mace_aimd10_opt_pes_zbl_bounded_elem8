@@ -1,0 +1,43 @@
+#!/bin/bash
+# FeN4-O2 PES scan with AIMD+opt+ZBL bounded element-aware MACE-FiLM checkpoint.
+
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=3
+#SBATCH -N 1
+#SBATCH --gres=gpu:1
+#SBATCH -J fen4_bfilm_pes
+#SBATCH --partition=8v100
+#SBATCH -o /home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film/slurm-pes-bfilm-elem8-%j.out
+
+set -euo pipefail
+
+export PYTHONPATH=/home/wuzhihong/software/mace:/home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film:${PYTHONPATH:-}
+export PYTHONUNBUFFERED=1
+export MPLCONFIGDIR=/tmp/ocp_mag_mplconfig_${USER:-wuzhihong}
+mkdir -p "${MPLCONFIGDIR}"
+
+PY=/home/wuzhihong/app/miniconda/envs/mace/bin/python
+WORK=/home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film
+SCAN=${WORK}/scan_fe_o2_adsorption_mace_film.py
+
+CKPT=${WORK}/checkpoints/fen4_mace_magmom_film_aimd10_opt_pes_zbl_bounded_elem8_v1/best.pt
+OUTROOT=${WORK}/pes_outputs/fen4_mace_aimd10_opt_pes_zbl_bounded_elem8_v1_gemoc_params
+
+mkdir -p "${OUTROOT}"
+
+"${PY}" "${SCAN}" \
+  --checkpoint "${CKPT}" \
+  --fe-index 54 \
+  --o-indices 59 60 \
+  --scan-distance-range 1.8:4.0:0.1 \
+  --device cuda \
+  --restraint-k 50 \
+  --opt-fmax 0.05 \
+  --opt-steps 200 \
+  --progress-every 5 \
+  --init-magmom-mode template \
+  --model-spec "AFM|${WORK}/data/fen4_afm_aimd_secondframe.extxyz|0|0" \
+  --model-spec "FM|${WORK}/data/fen4_fm_aimd_secondframe.extxyz|0|1" \
+  --output-csv "${OUTROOT}/fe_o2_scan_mace_aimd10_opt_pes_zbl_bounded_elem8.csv" \
+  --output-plot "${OUTROOT}/fe_o2_scan_mace_aimd10_opt_pes_zbl_bounded_elem8.png" \
+  --output-structures-dir "${OUTROOT}/structures"

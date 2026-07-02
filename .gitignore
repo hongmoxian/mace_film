@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.out
+*.log
+*.traj
+*.jsonl
+checkpoints/*/last.pt
+outputs/
+wandb/
+.DS_Store
+
