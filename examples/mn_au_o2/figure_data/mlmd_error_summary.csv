@@ -1,0 +1,25 @@
+state,model,metric,metric_label,axis_label,normalized_wasserstein_mean,normalized_wasserstein_std,n_runs
+AFM,Previous-initialized ML-MD,r_mn_o_min,Mn-O$_\mathrm{min}$,Mn-O$_\mathrm{min}$ ($\AA$),0.1979736367925241,0.03961092824846944,3
+AFM,Rule-initialized ML-MD,r_mn_o_min,Mn-O$_\mathrm{min}$,Mn-O$_\mathrm{min}$ ($\AA$),0.26689149670361006,0.04414180464041563,3
+AFM,Previous-initialized ML-MD,r_mn_o2_centroid,Mn-O$_2$,Mn-O$_2$ centroid ($\AA$),0.8130423114272528,0.2038713904443954,3
+AFM,Rule-initialized ML-MD,r_mn_o2_centroid,Mn-O$_2$,Mn-O$_2$ centroid ($\AA$),1.2029768207364482,0.045461393835269114,3
+AFM,Previous-initialized ML-MD,r_oo,O-O,O-O ($\AA$),0.8868758367786298,0.216551391599056,3
+AFM,Rule-initialized ML-MD,r_oo,O-O,O-O ($\AA$),1.2951465928516044,0.052242550679765395,3
+AFM,Previous-initialized ML-MD,o2_axis_angle_deg,O$_2$ angle,O$_2$ axis angle (deg),0.9805932776890898,0.3045812163673329,3
+AFM,Rule-initialized ML-MD,o2_axis_angle_deg,O$_2$ angle,O$_2$ axis angle (deg),1.4595350509561336,0.026273407123328235,3
+AFM,Previous-initialized ML-MD,m_mn,Mn moment,Mn moment ($\mu_B$),0.6700692935250098,0.17942779756431035,3
+AFM,Rule-initialized ML-MD,m_mn,Mn moment,Mn moment ($\mu_B$),1.8389452265032389,0.2931616338187742,3
+AFM,Previous-initialized ML-MD,m_o2_sum,O$_2$ moment,O$_2$ total moment ($\mu_B$),0.8962009479369909,0.20260459288817353,3
+AFM,Rule-initialized ML-MD,m_o2_sum,O$_2$ moment,O$_2$ total moment ($\mu_B$),1.2600116570922637,0.04313847704202508,3
+FM,Previous-initialized ML-MD,r_mn_o_min,Mn-O$_\mathrm{min}$,Mn-O$_\mathrm{min}$ ($\AA$),0.3635077586820033,0.040436091180229526,3
+FM,Rule-initialized ML-MD,r_mn_o_min,Mn-O$_\mathrm{min}$,Mn-O$_\mathrm{min}$ ($\AA$),0.369392337783452,0.1540612349513584,3
+FM,Previous-initialized ML-MD,r_mn_o2_centroid,Mn-O$_2$,Mn-O$_2$ centroid ($\AA$),0.35707851139133284,0.15419618968490467,3
+FM,Rule-initialized ML-MD,r_mn_o2_centroid,Mn-O$_2$,Mn-O$_2$ centroid ($\AA$),0.3809875695795643,0.032511291729435454,3
+FM,Previous-initialized ML-MD,r_oo,O-O,O-O ($\AA$),0.4336340335093391,0.13295326353232279,3
+FM,Rule-initialized ML-MD,r_oo,O-O,O-O ($\AA$),0.38973343591024046,0.04344994506775716,3
+FM,Previous-initialized ML-MD,o2_axis_angle_deg,O$_2$ angle,O$_2$ axis angle (deg),0.45019841066463456,0.17129882860966694,3
+FM,Rule-initialized ML-MD,o2_axis_angle_deg,O$_2$ angle,O$_2$ axis angle (deg),0.3387035682936079,0.02343566684707603,3
+FM,Previous-initialized ML-MD,m_mn,Mn moment,Mn moment ($\mu_B$),0.8129154386304017,0.049494370036498314,3
+FM,Rule-initialized ML-MD,m_mn,Mn moment,Mn moment ($\mu_B$),0.46038614556837637,0.10829055525894406,3
+FM,Previous-initialized ML-MD,m_o2_sum,O$_2$ moment,O$_2$ total moment ($\mu_B$),0.709239052718515,0.1832539277951267,3
+FM,Rule-initialized ML-MD,m_o2_sum,O$_2$ moment,O$_2$ total moment ($\mu_B$),0.5182297524555258,0.06076541888069617,3

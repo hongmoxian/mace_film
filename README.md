@@ -1,123 +1,109 @@
-# MACE-FiLM magnetic-moment potentials
+# MACE-FiLM for spin-polarized surface dynamics
 
-This directory is a compact release package for the MACE-FiLM part of the paper.  It contains the custom magnetic-moment FiLM model, training code, MD rollout code, PES scan code, and one small FeN4-O2 example.
+This repository is the compact code-and-data release accompanying the paper. It contains the magnetic-moment-conditioned MACE-FiLM implementation, training and ASE evaluation code, the final checkpoints used for the reported calculations, compressed training datasets, and the final paper figures with their plotted data.
 
-The example data are intentionally small so that the repository can be hosted on GitHub.  The full training datasets and raw ML-MD trajectories should be archived separately, for example with Zenodo or an institutional data repository.
-
-File sizes and SHA256 checksums are listed in `MANIFEST.csv`.  A short note on omitted large files is provided in `DATA_AVAILABILITY.md`.
-
-## Contents
+The release is organized by chemical system:
 
 ```text
-mace_film/
-  mace_magmom_film.py                  # MACE model with initial-magnetic-moment FiLM conditioning
-  train_fen4_mace_magmom_film.py       # energy/force/magnetic-moment training entry point
-  run_md_mace_film.py                  # ML-MD rollout with magnetic-moment propagation
-  scan_fe_o2_adsorption_mace_film.py   # constrained Fe-O2 PES scan
-  build_mace_extxyz_from_pt_cache.py   # internal helper used to build extxyz datasets
-  subset_extxyz_by_info.py             # small extxyz filtering utility
-  torch_ema.py                         # EMA helper
-
-examples/fen4/
-  data/
-    fen4_aimd10_opt_pes_previous_sample20.extxyz
-    fen4_afm_aimd_secondframe.extxyz
-    fen4_fm_aimd_secondframe.extxyz
-    fen4_fm_aimd_frame5401.extxyz
-    atomic_energy_linref.json
-  checkpoints/
-    best.pt
-    metrics.csv
-  pes_outputs/
-    fe_o2_scan_mace_aimd10_opt_pes_zbl_bounded_elem8.csv
-    fe_o2_scan_mace_aimd10_opt_pes_zbl_bounded_elem8.png
-  figure_source_data/
-    dft_pes_reference.csv
-    fen4_bounded_film_dft_ml_pes_magmom_overlay_data.csv
-    fen4_afm_fm_previous_rule_selected_normalized_wasserstein.csv
-    figure2_previous_S0_merged.csv
-    figure2_previous_S2_merged.csv
-  figures/
-    final FeN4 PES/magnetic-moment and ML-MD distribution figures
-  slurm/
-    original Slurm scripts plus portable example scripts
-
-scripts/
-  plotting scripts used for the FeN4 figures
+mace_film/                         # model, training, PES, and ASE-ML-MD source
+examples/fen4/                     # FeN4-O2 data, models, figures, and figure data
+examples/mn_au_o2/                 # Mn-Au-O2 data, models, figures, and figure data
+examples/ceo2/                     # CeO2 data, model, figures, and figure data
+figures/workflow.png               # overview figure
 ```
 
-## Environment
+## Model and data provenance
 
-The code was developed with Python, PyTorch, ASE, and MACE.  A minimal environment is:
+The labels used below are descriptive names for the magnetic-conditioning protocols:
+
+- **Spp (previous)** propagates the predicted magnetic moments from one MD step to the next.
+- **Stp (rule)** resets a branch-consistent magnetic template at every step.
+
+These labels describe the magnetic seed protocol, not a claim that one protocol is universally superior.
+
+### FeN4-O2
+
+The FeN4 PES and ML-MD figures were generated with different model families because the two calculations emphasize different regions of configuration space.
+
+- **ML-MD:** `examples/fen4/models/md_spp_previous_best.pt` and `md_stp_rule_best.pt`, trained on the stride-4 AIMD datasets in `examples/fen4/data/md/`.
+- **PES:** `pes_afm_energy_weighted_best.pt` and `pes_fm_opt_finetuned_best.pt`, trained/fine-tuned with the AIMD-plus-optimization data and the short-distance optimization data in `examples/fen4/data/pes/`. The final PES plot combines the AFM energy-weighted branch checkpoint and the FM optimization-finetuned branch checkpoint; it is therefore not represented by one universal FeN4 checkpoint.
+
+### Mn-Au-O2
+
+PES and ML-MD use the same model family. The release contains the previous/Spp and rule/Stp companion checkpoints:
+
+- `examples/mn_au_o2/models/pes_md_spp_previous_best.pt`
+- `examples/mn_au_o2/models/pes_md_stp_rule_best.pt`
+
+Their associated AIMD, constrained-scan, and optimization data are in `examples/mn_au_o2/data/`. The PES scan uses the Mn-O distance restraint together with the angle restraint used for the reported calculation.
+
+### CeO2
+
+CeO2 uses one mixed training set and one final checkpoint:
+
+- Model: `examples/ceo2/models/mixed_2O3O4O_softmax_best.pt`
+- Dataset: `examples/ceo2/data/mixed_2O3O4O_softmax.extxyz.gz`
+
+The mixed dataset contains 2O, 3O, and 4O configurations, including the cleaned 4O trajectory subset. The final main localization figure and the corresponding SI figure show the 2O system; this presentation choice does not mean that 3O and 4O were absent from training.
+
+## Source code
+
+The framework source is retained under `mace_film/`:
+
+- `mace_magmom_film.py`: magnetic-moment FiLM MACE model;
+- `train_fen4_mace_magmom_film.py`: FeN4 training entry point;
+- `run_md_mace_film.py`: ASE ML-MD with optional magnetic-moment rollout;
+- `scan_fe_o2_adsorption_mace_film.py`: constrained FeN4 PES scan;
+- `systems/mn_au_o2/`: Mn-Au-O2 training, MD, and PES entry points;
+- `systems/ceo2/`: CeO2 training and MD entry points.
+
+The system-specific model files are kept with their corresponding entry points so that the released scripts preserve the implementations used for each system.
+
+## Quick checks
+
+Install the Python dependencies and make the package importable:
 
 ```bash
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
+export PYTHONPATH="$PWD:$PYTHONPATH"
 ```
 
-For GPU training and MD, install a PyTorch build matching the CUDA version on your cluster.  The custom scripts expect the upstream `mace` Python package to be importable.
-
-## Quick Checks
-
-From this directory:
+Inspect the available command-line options:
 
 ```bash
-export PYTHONPATH=$PWD:$PYTHONPATH
-python mace_film/train_fen4_mace_magmom_film.py --help
-python mace_film/run_md_mace_film.py --help
-python mace_film/scan_fe_o2_adsorption_mace_film.py --help
+python3 mace_film/train_fen4_mace_magmom_film.py --help
+python3 mace_film/run_md_mace_film.py --help
+python3 mace_film/scan_fe_o2_adsorption_mace_film.py --help
+python3 mace_film/systems/mn_au_o2/train_mn_au_mace_magmom_film.py --help
+python3 mace_film/systems/mn_au_o2/run_md_mace_film.py --help
+python3 mace_film/systems/mn_au_o2/scan_mn_au_o2_adsorption_mace_film.py --help
+python3 mace_film/systems/ceo2/train_ceo2_mace_magmom_film.py --help
+python3 mace_film/systems/ceo2/run_md_mace_film.py --help
 ```
 
-## FeN4 Example
-
-The included `sample20` extxyz is only a lightweight example, not the full paper training set.
-
-Train a short smoke-test model:
+The `.extxyz.gz` files are compressed only for repository transport. Decompress the required file before passing it to ASE/MACE, for example:
 
 ```bash
-bash examples/fen4/slurm/train_fen4_example.sh
+gzip -dk examples/ceo2/data/mixed_2O3O4O_softmax.extxyz.gz
 ```
 
-Run a PES scan using the bundled checkpoint:
+GPU training and production MD require a PyTorch installation compatible with the local CUDA driver and an importable upstream `mace` package. The supplied `.pt` files are the final checkpoints; the neighboring metrics and split-summary files record their evaluation metadata.
 
-```bash
-bash examples/fen4/slurm/scan_pes_fen4_example.sh
-```
+## Figures and plotted data
 
-Run an ML-MD rollout using the bundled checkpoint:
+Each system directory contains:
 
-```bash
-bash examples/fen4/slurm/md_fen4_example.sh
-```
+- `figures/`: final main-text and SI figures in PNG and PDF formats;
+- `figure_data/`: CSV files used to generate the figures;
+- `models/`: checkpoints and compact training/test metadata;
+- `data/`: the associated compressed datasets and dataset summaries.
 
-The original cluster submission scripts are also retained in `examples/fen4/slurm/`.  They use absolute paths from the original working directory and are kept for provenance.
+The exact model/data mapping for the PES and ML-MD figures is documented above. `MANIFEST.csv` records the byte size and SHA256 hash of every other tracked release file.
 
-## Paper FeN4 Figures
+## Deliberate exclusions
 
-Two FeN4 paper figures are bundled:
+To keep this repository focused and practical to clone, it does not contain raw VASP `OUTCAR` files, raw AIMD trajectory directories, full ML-MD trajectory dumps, Slurm logs, resume checkpoints such as `last.pt`, or obsolete exploratory scan/plot outputs. These files are not required to inspect the final figures or use the released model/data package and should be archived separately when complete raw-data deposition is needed.
 
-1. `examples/fen4/figures/fen4_bounded_film_dft_ml_pes_magmom_overlay.*`
-   - DFT input: `examples/fen4/figure_source_data/dft_pes_reference.csv`
-   - ML input: `examples/fen4/figure_source_data/fe_o2_scan_mace_aimd10_opt_pes_zbl_bounded_elem8.csv`
-   - merged plot data: `examples/fen4/figure_source_data/fen4_bounded_film_dft_ml_pes_magmom_overlay_data.csv`
-   - model: `examples/fen4/checkpoints/best.pt`
-   - scan script: `mace_film/scan_fe_o2_adsorption_mace_film.py`
-   - original submission script: `examples/fen4/slurm/sub.scan_fen4_mace_aimd10_opt_pes_zbl_bounded_elem8`
+## Citation and license
 
-2. `examples/fen4/figures/fen4_afm_fm_previous_rule_selected_statistics.*`
-   - compact plotted error data: `examples/fen4/figure_source_data/fen4_afm_fm_previous_rule_selected_normalized_wasserstein.csv`
-   - reference AIMD summaries: `figure2_previous_S0_merged.csv`, `figure2_previous_S2_merged.csv`
-   - plotting script: `scripts/plot_fen4_afm_fm_previous_best3_rule_worst3_compact.py`
-   - raw ML-MD trajectories are not bundled by default because they are larger and are better suited for data-archive deposition.
-
-## What Is Not Included
-
-The following files are intentionally excluded from the GitHub-sized package:
-
-- full FeN4 training extxyz files
-- full raw ML-MD trajectories
-- all `last.pt` resume checkpoints
-- Slurm stdout logs
-- repeated exploratory PES/MD outputs
-- VASP OUTCAR files
-
-For strict full reproduction of every density panel from raw trajectories, archive the full `md_outputs` directories and VASP OUTCAR/AIMD trajectory files separately.
+Please cite the accompanying paper when using the code, checkpoints, datasets, or figures. Add the project license here before public release if a repository-level license is required.

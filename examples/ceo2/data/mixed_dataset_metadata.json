@@ -1,0 +1,25 @@
+{
+  "output": "/home/wuzhihong/software/ocp_mag/work_ceo2_mace_mdtest/mace_film/data/ceo2_2O3O_4Otrajclean_src6src7_softmax.extxyz",
+  "base_extxyz": "/home/wuzhihong/software/ocp_mag/work_ceo2_mace_mdtest/mace_film/data/ceo2_2O3O4O_aimd_previous_clean.extxyz",
+  "clean_4o_extxyz": "/home/wuzhihong/software/ocp_mag/work_ceo2_mace_mdtest/mace_film/data/ceo2_4O_trajclean_src6_src7.extxyz",
+  "base_kept": {
+    "total": 9703,
+    "counts": {
+      "2O": 4999,
+      "3O": 4704
+    }
+  },
+  "clean_4o_kept": {
+    "total": 1250,
+    "counts": {
+      "4O": 1250
+    }
+  },
+  "family_counts": {
+    "2O": 4999,
+    "3O": 4704,
+    "4O": 1250
+  },
+  "num_frames": 10953,
+  "note": "2O and 3O are retained from ceo2_2O3O4O_aimd_previous_clean.extxyz; 4O is replaced by trajectory-level clean src6/src7 data."
+}

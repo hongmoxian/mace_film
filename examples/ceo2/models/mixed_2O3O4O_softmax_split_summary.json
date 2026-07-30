@@ -1,0 +1,26 @@
+{
+  "num_train": 8763,
+  "num_val": 1095,
+  "num_test": 1095,
+  "num_total": 10953,
+  "by_state_id": {
+    "2": {
+      "num_train": 3999,
+      "num_val": 500,
+      "num_test": 500,
+      "num_total": 4999
+    },
+    "3": {
+      "num_train": 3764,
+      "num_val": 470,
+      "num_test": 470,
+      "num_total": 4704
+    },
+    "4": {
+      "num_train": 1000,
+      "num_val": 125,
+      "num_test": 125,
+      "num_total": 1250
+    }
+  }
+}

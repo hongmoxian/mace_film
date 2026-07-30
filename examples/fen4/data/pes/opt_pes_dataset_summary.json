@@ -1,0 +1,32 @@
+{
+  "output": "/home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film/data/fen4_aimd_stride4_opt_pes_previous_bounded_elem8.extxyz",
+  "num_frames": 6103,
+  "by_sample_group": {
+    "aimd_s0": 2499,
+    "aimd_s2": 2499,
+    "opt_s0": 369,
+    "opt_s2": 736
+  },
+  "by_state_id": {
+    "0": 2868,
+    "1": 3235
+  },
+  "initial_equals_target": 186,
+  "initial_equals_target_fraction": 0.030476814681304278,
+  "sources": {
+    "aimd_stride4": {
+      "path": "/home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film/data/fen4_aimd_stride4_previous_bounded_elem8.extxyz",
+      "sha256": "4d6ee406cd59e9f77526ea035c1f75a01e65cce265f1595c3f2366dceea2d219",
+      "num_frames": 4998
+    },
+    "opt_unchanged": {
+      "path": "/home/wuzhihong/software/ocp_mag/work_fen4_escn_zbl_mdtest/mace_film/data/fen4_aimd10_opt_pes_previous_rebuilt.extxyz",
+      "sha256": "aad405965f0acb34d61ee4c42d8d4fa80630a3cbf48e23568ff25969f1d26464",
+      "selected_groups": [
+        "opt_s0",
+        "opt_s2"
+      ],
+      "num_frames": 1105
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "num_train": 501,
+  "num_val": 10,
+  "num_test": 10,
+  "num_total": 521,
+  "by_state_id": {
+    "0": {
+      "num_train": 296,
+      "num_val": 6,
+      "num_test": 6,
+      "num_total": 308
+    },
+    "1": {
+      "num_train": 205,
+      "num_val": 4,
+      "num_test": 4,
+      "num_total": 213
+    }
+  }
+}

@@ -1,13 +1,16 @@
-# Data availability note
+# Data availability
 
-This GitHub package is intentionally compact. It contains the code, a small FeN4-O2 example dataset, the final bounded MACE-FiLM checkpoint used by the included PES example, and the source CSV files needed for the bundled FeN4 paper figures.
+This repository is a compact release of the MACE-FiLM code and the data used for the paper figures.
 
-Large files that should be deposited separately for full reproducibility are:
+Included:
 
-- full FeN4 training extxyz datasets
-- full FeN4 raw ML-MD trajectory directories
-- VASP OUTCAR and raw AIMD trajectories
-- exploratory checkpoints such as `last.pt`
-- repeated Slurm stdout/stderr logs
+- compressed system datasets in `examples/*/data/`;
+- final checkpoints and compact training/test metadata in `examples/*/models/`;
+- final PNG/PDF figures and the CSV data used to plot them;
+- the retained MACE-FiLM training, PES-scan, and ASE ML-MD source code.
 
-The bundled `examples/fen4/data/fen4_aimd10_opt_pes_previous_sample20.extxyz` file is a 20-frame smoke-test subset, not the full training set used in the manuscript.
+The FeN4 release contains separate PES and ML-MD model families. The Mn-Au-O2 release contains the common model family used for both PES and ML-MD. The CeO2 release contains the mixed 2O/3O/4O training dataset and its final checkpoint.
+
+Raw VASP files, raw AIMD/ML-MD trajectory directories, Slurm logs, resume checkpoints, and discarded exploratory outputs are intentionally omitted from this GitHub package. They should be deposited in a persistent research-data archive if complete raw-trajectory reproducibility is required.
+
+SHA256 checksums for the released files are recorded in `MANIFEST.csv`.

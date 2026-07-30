@@ -1,0 +1,52 @@
+{
+  "pt_cache": "/home/wuzhihong/software/ocp_mag/mn-o-o2/cache/aimd_scan_afmopt_fmmd_pt_cache",
+  "metadata": "/home/wuzhihong/software/ocp_mag/mn-o-o2/cache/aimd_scan_afmopt_fmmd_pt_cache/cache_metadata.json",
+  "output": "/home/wuzhihong/software/ocp_mag/work_mn_au_mace_mdtest/mace_film/data/mn_au_o2_aimd_scan_afmopt_fmmd_previous.extxyz",
+  "sources": [
+    {
+      "source_idx": 0,
+      "state_id": 0,
+      "sample_group": "aimd_afm",
+      "num_frames": 2500,
+      "num_trajectories": 1,
+      "exact_initial_equals_target": 9,
+      "exact_initial_equals_target_fraction": 0.0036,
+      "max_abs_initial_target_diff_mean": 0.010576404388062656,
+      "max_abs_initial_target_diff_max": 0.03900003433227539
+    },
+    {
+      "source_idx": 1,
+      "state_id": 1,
+      "sample_group": "aimd_fm",
+      "num_frames": 2500,
+      "num_trajectories": 1,
+      "exact_initial_equals_target": 12,
+      "exact_initial_equals_target_fraction": 0.0048,
+      "max_abs_initial_target_diff_mean": 0.014304403270687908,
+      "max_abs_initial_target_diff_max": 1.2289999723434448
+    },
+    {
+      "source_idx": 2,
+      "state_id": 0,
+      "sample_group": "scan_afm",
+      "num_frames": 400,
+      "num_trajectories": 20,
+      "exact_initial_equals_target": 32,
+      "exact_initial_equals_target_fraction": 0.08,
+      "max_abs_initial_target_diff_mean": 0.0032200118896435013,
+      "max_abs_initial_target_diff_max": 0.03700000047683716
+    },
+    {
+      "source_idx": 3,
+      "state_id": 1,
+      "sample_group": "scan_fm",
+      "num_frames": 378,
+      "num_trajectories": 19,
+      "exact_initial_equals_target": 40,
+      "exact_initial_equals_target_fraction": 0.10582010582010581,
+      "max_abs_initial_target_diff_mean": 0.004555572453817284,
+      "max_abs_initial_target_diff_max": 0.6159999966621399
+    }
+  ],
+  "num_frames": 5778
+}
