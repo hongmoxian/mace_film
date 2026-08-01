@@ -26,7 +26,7 @@ These labels describe the magnetic seed protocol, not a claim that one protocol 
 The FeN4 PES and ML-MD figures were generated with different model families because the two calculations emphasize different regions of configuration space.
 
 - **ML-MD:** `examples/fen4/models/md_spp_previous_best.pt` and `md_stp_rule_best.pt`, trained on the stride-4 AIMD datasets in `examples/fen4/data/md/`.
-- **PES:** `pes_afm_energy_weighted_best.pt` and `pes_fm_opt_finetuned_best.pt`, trained/fine-tuned with the AIMD-plus-optimization data and the short-distance optimization data in `examples/fen4/data/pes/`. The final PES plot combines the AFM energy-weighted branch checkpoint and the FM optimization-finetuned branch checkpoint; it is therefore not represented by one universal FeN4 checkpoint.
+- **PES:** the released `figures/pes.*` and `figure_data/pes_dft_ml.csv` use one checkpoint for both spin branches: `examples/fen4/models/pes_afm_energy_weighted_best.pt`. This checkpoint was fine-tuned on the AFM constrained-optimization trajectories in `examples/fen4/data/pes/`. AFM and FM scans use their respective AIMD geometry templates; at every target Fe-O separation, the conditioning moments are initialized from a branch-matched early configuration of the corresponding DFT constrained-relaxation trajectory and then held fixed during the static MACE-FiLM optimization. The accompanying `pes_fm_opt_finetuned_best.pt` is retained as a branch-specific comparison checkpoint, but it does not generate the released PES figure.
 
 ### Mn-Au-O2
 
