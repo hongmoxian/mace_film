@@ -29,6 +29,7 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         film_use_tanh: bool = False,
         magmom_input_clip: Optional[float] = None,
         film_element_embedding_dim: int = 0,
+        enforce_spin_inversion: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -37,6 +38,9 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         self.conditioning_mode = str(conditioning_mode or "film").strip().lower()
         self.film_scale = float(film_scale)
         self.film_use_tanh = bool(film_use_tanh)
+        # When enabled, symmetrize the FiLM conditioning map for m and -m
+        # before message passing, following the GemOC even-feature pattern.
+        self.enforce_spin_inversion = bool(enforce_spin_inversion)
         self.magmom_input_clip = (
             None if magmom_input_clip is None else float(magmom_input_clip)
         )
@@ -130,15 +134,37 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
             elem_feat = self.film_element_embedding(element_idx).to(node_feats.dtype)
             film_input = torch.cat([normalized_magmom, elem_feat], dim=-1)
 
+        if self.enforce_spin_inversion:
+            inverted_input = -normalized_magmom
+            if self.film_element_embedding is not None:
+                inverted_input = torch.cat([inverted_input, elem_feat], dim=-1)
+
         if self.conditioning_mode == "concat":
             conditioned_scalar = self.magmom_concat_proj(
                 torch.cat([node_feats[:, : self._initial_scalar_dim], film_input], dim=-1)
             )
+            if self.enforce_spin_inversion:
+                conditioned_scalar = 0.5 * (
+                    conditioned_scalar
+                    + self.magmom_concat_proj(
+                        torch.cat(
+                            [
+                                node_feats[:, : self._initial_scalar_dim],
+                                inverted_input,
+                            ],
+                            dim=-1,
+                        )
+                    )
+                )
             if node_feats.shape[-1] == self._initial_scalar_dim:
                 return conditioned_scalar
             return torch.cat([conditioned_scalar, node_feats[:, self._initial_scalar_dim :]], dim=-1)
 
         gamma_beta = self.magmom_film(film_input)
+        if self.enforce_spin_inversion:
+            gamma_beta = 0.5 * (
+                gamma_beta + self.magmom_film(inverted_input)
+            )
         gamma_raw, beta_raw = gamma_beta.chunk(2, dim=-1)
         if self.film_use_tanh:
             gamma_raw = torch.tanh(gamma_raw)
@@ -163,7 +189,7 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
             scalar_features.append(feats[:, :scalar_dim])
         return self.magmom_readout(torch.cat(scalar_features, dim=-1)).reshape(-1)
 
-    def forward(
+    def _forward_single(
         self,
         data: Dict[str, torch.Tensor],
         training: bool = False,
@@ -314,3 +340,36 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
             "node_feats": node_feats_out,
             "magmom": self._readout_magmom(node_feats_list),
         }
+
+    def forward(
+        self,
+        data: Dict[str, torch.Tensor],
+        training: bool = False,
+        compute_force: bool = True,
+        compute_virials: bool = False,
+        compute_stress: bool = False,
+        compute_displacement: bool = False,
+        compute_hessian: bool = False,
+        compute_edge_forces: bool = False,
+        compute_atomic_stresses: bool = False,
+        lammps_mliap: bool = False,
+    ) -> Dict[str, Optional[torch.Tensor]]:
+        """Evaluate MACE with optional even magnetic conditioning.
+
+        ``enforce_spin_inversion`` averages FiLM conditioning features from
+        ``m`` and ``-m`` before message passing. The expensive equivariant
+        message passing is still evaluated once, so the energy is even under
+        global magnetic-seed reversal and the force remains its gradient.
+        """
+        return self._forward_single(
+            data,
+            training=training,
+            compute_force=compute_force,
+            compute_virials=compute_virials,
+            compute_stress=compute_stress,
+            compute_displacement=compute_displacement,
+            compute_hessian=compute_hessian,
+            compute_edge_forces=compute_edge_forces,
+            compute_atomic_stresses=compute_atomic_stresses,
+            lammps_mliap=lammps_mliap,
+        )

@@ -394,6 +394,9 @@ def _build_model(args, z_table):
             "magmom_output_normalize": bool(
                 getattr(args, "magmom_output_normalize", False)
             ),
+            "enforce_spin_inversion": bool(
+                getattr(args, "enforce_spin_inversion", False)
+            ),
         },
         flush=True,
     )
@@ -424,6 +427,7 @@ def _build_model(args, z_table):
         magmom_input_clip=getattr(args, "magmom_input_clip", None),
         film_element_embedding_dim=getattr(args, "film_element_embedding_dim", 0),
         magmom_output_normalize=getattr(args, "magmom_output_normalize", False),
+        enforce_spin_inversion=getattr(args, "enforce_spin_inversion", False),
     )
 
 
@@ -564,6 +568,14 @@ def main():
         help=(
             "Optional element embedding dimension concatenated with normalized "
             "magmom before FiLM. Keep 0 for the shared FiLM baseline."
+        ),
+    )
+    parser.add_argument(
+        "--enforce-spin-inversion",
+        action="store_true",
+        help=(
+            "Average FiLM conditioning features generated from m and -m before "
+            "message passing, enforcing even energy under global spin inversion."
         ),
     )
     parser.add_argument(

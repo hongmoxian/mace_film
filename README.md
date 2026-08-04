@@ -59,6 +59,60 @@ The framework source is retained under `mace_film/`:
 
 The system-specific model files are kept with their corresponding entry points so that the released scripts preserve the implementations used for each system.
 
+### Optional spin-inversion symmetry
+
+The framework provides an opt-in `--enforce-spin-inversion` flag. When enabled,
+the FiLM conditioning features generated from `m` and its global inverse `-m`
+are averaged before equivariant message passing, following the even-feature
+construction used in GemOC. For a geometry `R` and initial magnetic seed `m`,
+the conditioning layer forms:
+
+```text
+h_even(R,m) = [h(R,m) + h(R,-m)] / 2
+E_even(R,m) = E(R,h_even)
+```
+
+Because `h_even(R,m) = h_even(R,-m)`, the energy path satisfies:
+
+```text
+E_even(R,m) = E_even(R,-m)
+```
+
+This does not add DFT structures or double the expensive MACE
+message-passing cost. Forces are obtained from the same energy by automatic
+differentiation:
+
+```text
+F_even(R,m) = - d E_even(R,m) / d R
+```
+
+Therefore no separate force symmetrization is needed. The magnetic readout is
+not given an additional odd/even projection. For CeO2, the existing
+`--abs-initial-magmom` option already makes the FiLM input invariant to global
+sign reversal; when that option is active, the additional feature average is
+skipped. The default is disabled, so existing checkpoints and reported
+calculations remain unchanged.
+
+The switch is available during training:
+
+```bash
+python3 mace_film/train_fen4_mace_magmom_film.py \
+  --extxyz path/to/data.extxyz \
+  --save-dir checkpoints/spin_even \
+  --enforce-spin-inversion
+```
+
+For the base ASE MD and FeN4 PES drivers, use the same flag at evaluation time:
+
+```bash
+python3 mace_film/run_md_mace_film.py ... --enforce-spin-inversion
+python3 mace_film/scan_fe_o2_adsorption_mace_film.py ... --enforce-spin-inversion
+```
+
+The flag is disabled by default. Existing model checkpoints and previously
+reported calculations therefore use the original single-seed conditioning
+path unless the flag is explicitly enabled.
+
 ## Quick checks
 
 Install the Python dependencies and make the package importable:

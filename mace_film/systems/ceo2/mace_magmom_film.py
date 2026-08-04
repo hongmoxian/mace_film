@@ -31,6 +31,7 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         ce_atomic_number: int = 58,
         ce_active_prob_mode: str = "sigmoid",
         abs_initial_magmom: bool = False,
+        enforce_spin_inversion: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -45,6 +46,7 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
                 f"Unsupported ce_active_prob_mode={self.ce_active_prob_mode!r}"
             )
         self.abs_initial_magmom = bool(abs_initial_magmom)
+        self.enforce_spin_inversion = bool(enforce_spin_inversion)
         self.magmom_input_clip = (
             None if magmom_input_clip is None else float(magmom_input_clip)
         )
@@ -139,7 +141,17 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         if self.film_element_embedding is not None:
             elem_feat = self.film_element_embedding(element_idx).to(node_feats.dtype)
             film_input = torch.cat([normalized_magmom, elem_feat], dim=-1)
+        # abs_initial_magmom already makes the conditioning input invariant
+        # to m -> -m; avoid averaging an artificial negative copy in that mode.
+        if self.enforce_spin_inversion and not self.abs_initial_magmom:
+            inverted_input = -normalized_magmom
+            if self.film_element_embedding is not None:
+                inverted_input = torch.cat([inverted_input, elem_feat], dim=-1)
         gamma_beta = self.magmom_film(film_input)
+        if self.enforce_spin_inversion and not self.abs_initial_magmom:
+            gamma_beta = 0.5 * (
+                gamma_beta + self.magmom_film(inverted_input)
+            )
         gamma_raw, beta_raw = gamma_beta.chunk(2, dim=-1)
         if self.film_use_tanh:
             gamma_raw = torch.tanh(gamma_raw)

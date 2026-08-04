@@ -609,6 +609,22 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--enforce-spin-inversion",
+        dest="enforce_spin_inversion",
+        action="store_true",
+        default=None,
+        help=(
+            "Override the checkpoint and average the FiLM conditioning map for "
+            "m and -m before message passing."
+        ),
+    )
+    parser.add_argument(
+        "--no-enforce-spin-inversion",
+        dest="enforce_spin_inversion",
+        action="store_false",
+        help="Override the checkpoint and disable spin-inversion symmetrization.",
+    )
+    parser.add_argument(
         "--rollout-magmom-interval",
         type=int,
         default=1,
@@ -856,6 +872,7 @@ def main() -> None:
                 device=args.device,
                 init_magmom=init_magmoms,
                 rollout_magmom=args.rollout_magmom,
+                enforce_spin_inversion=args.enforce_spin_inversion,
                 fe_index=args.fe_index,
                 anchor_o_index=anchor,
                 other_o_index=other_o,

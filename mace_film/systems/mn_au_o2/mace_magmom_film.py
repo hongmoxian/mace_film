@@ -29,6 +29,7 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         magmom_input_clip: Optional[float] = None,
         film_element_embedding_dim: int = 0,
         magmom_output_normalize: bool = False,
+        enforce_spin_inversion: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -36,6 +37,7 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         self.target_magmom_key = target_magmom_key
         self.film_scale = float(film_scale)
         self.film_use_tanh = bool(film_use_tanh)
+        self.enforce_spin_inversion = bool(enforce_spin_inversion)
         self.magmom_input_clip = (
             None if magmom_input_clip is None else float(magmom_input_clip)
         )
@@ -124,7 +126,15 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         if self.film_element_embedding is not None:
             elem_feat = self.film_element_embedding(element_idx).to(node_feats.dtype)
             film_input = torch.cat([normalized_magmom, elem_feat], dim=-1)
+        if self.enforce_spin_inversion:
+            inverted_input = -normalized_magmom
+            if self.film_element_embedding is not None:
+                inverted_input = torch.cat([inverted_input, elem_feat], dim=-1)
         gamma_beta = self.magmom_film(film_input)
+        if self.enforce_spin_inversion:
+            gamma_beta = 0.5 * (
+                gamma_beta + self.magmom_film(inverted_input)
+            )
         gamma_raw, beta_raw = gamma_beta.chunk(2, dim=-1)
         if self.film_use_tanh:
             gamma_raw = torch.tanh(gamma_raw)

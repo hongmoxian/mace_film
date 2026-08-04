@@ -137,11 +137,14 @@ class MACEFilmMDCalculator(Calculator):
         init_magmom=None,
         rollout_magmom=True,
         atomic_numbers=None,
+        enforce_spin_inversion=None,
     ):
         super().__init__()
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
         payload = torch.load(checkpoint, map_location=self.device)
         args = SimpleNamespace(**payload["args"])
+        if enforce_spin_inversion is not None:
+            args.enforce_spin_inversion = bool(enforce_spin_inversion)
         z_values = atomic_numbers
         if z_values is None:
             z_values = getattr(args, "atomic_numbers", None)
@@ -314,6 +317,22 @@ def parse_args():
     parser.add_argument("--velocity-seed", type=int, default=None)
     parser.add_argument("--rollout-magmom", action="store_true")
     parser.add_argument(
+        "--enforce-spin-inversion",
+        dest="enforce_spin_inversion",
+        action="store_true",
+        default=None,
+        help=(
+            "Override the checkpoint and average the FiLM conditioning map for "
+            "m and -m before message passing."
+        ),
+    )
+    parser.add_argument(
+        "--no-enforce-spin-inversion",
+        dest="enforce_spin_inversion",
+        action="store_false",
+        help="Override the checkpoint and disable spin-inversion symmetrization.",
+    )
+    parser.add_argument(
         "--init-magmom-mode",
         choices=["trajectory", "rule", "constant"],
         default="trajectory",
@@ -341,6 +360,7 @@ def main():
         device=args.device,
         init_magmom=init_magmoms,
         rollout_magmom=args.rollout_magmom,
+        enforce_spin_inversion=args.enforce_spin_inversion,
         atomic_numbers=args.atomic_numbers,
     )
     atoms.calc = calc

@@ -513,6 +513,9 @@ def _build_model(args, z_table):
                 getattr(args, "film_element_embedding_dim", 0)
             ),
             "abs_initial_magmom": bool(getattr(args, "abs_initial_magmom", False)),
+            "enforce_spin_inversion": bool(
+                getattr(args, "enforce_spin_inversion", False)
+            ),
             "ce_magmom_mode": f"{getattr(args, 'ce_active_loss_type', 'focal_bce')}_prob_times_amplitude",
             "ce_active_loss_type": str(getattr(args, "ce_active_loss_type", "focal_bce")),
             "ce_atomic_number": int(getattr(args, "ce_atomic_number", 58)),
@@ -552,6 +555,7 @@ def _build_model(args, z_table):
             else "sigmoid"
         ),
         abs_initial_magmom=getattr(args, "abs_initial_magmom", False),
+        enforce_spin_inversion=getattr(args, "enforce_spin_inversion", False),
     )
 
 
@@ -705,6 +709,14 @@ def main():
         help=(
             "Use abs(initial_magmom) as the FiLM magnetic input. This removes "
             "spin-sign gauge noise and matches non-negative magmom rollout."
+        ),
+    )
+    parser.add_argument(
+        "--enforce-spin-inversion",
+        action="store_true",
+        help=(
+            "Average FiLM conditioning features generated from m and -m before "
+            "message passing, enforcing even energy under global spin inversion."
         ),
     )
     parser.add_argument(
