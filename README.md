@@ -26,7 +26,18 @@ These labels describe the magnetic seed protocol, not a claim that one protocol 
 The FeN4 PES and ML-MD figures were generated with different model families because the two calculations emphasize different regions of configuration space.
 
 - **ML-MD:** `examples/fen4/models/md_spp_previous_best.pt` and `md_stp_rule_best.pt`, trained on the stride-4 AIMD datasets in `examples/fen4/data/md/`.
-- **PES:** the released `figures/pes.*` and `figure_data/pes_dft_ml.csv` use one checkpoint for both spin branches: `examples/fen4/models/pes_joint_opt_energy10_fixed_best.pt`. Starting from the bounded element-aware FiLM + ZBL potential, this checkpoint was jointly fine-tuned on the AFM and FM early constrained-optimization trajectories with energy/force/atomic-moment/total-moment loss weights of 10/100/10/1. AFM and FM scans use their respective AIMD geometry templates; at every target Fe-O separation, the conditioning moments are initialized from a branch-matched early configuration of the corresponding DFT constrained-relaxation trajectory and then held fixed during the static MACE-FiLM optimization. The plotted PES removes the harmonic-restraint contribution before aligning each branch to its `d = 4.0 A` reference.
+- **PES:** the released `figures/pes.*` and `figure_data/pes_dft_ml.csv` use the same checkpoint for both spin branches: `examples/fen4/models/pes_afm_energy10_best.pt` (the manuscript "Old E10" model). Its bounded element-aware FiLM + ZBL parent model had already been trained on the combined AFM/FM AIMD, optimization, and PES data. The released checkpoint was then fine-tuned at `1e-5` learning rate for 30 epochs using the 308 AFM early constrained-optimization frames in `examples/fen4/data/pes/opt_vaspinit_afm_energy10_finetune.extxyz.gz` (290/9/9 train/validation/test split). The energy/force/atomic-moment/total-moment loss weights were 10/50/5/1. This is an AFM-focused fine-tune, not a model trained without FM information, and no branch-specific FM checkpoint is used in the reported figure.
+
+For each branch, one equilibrated AIMD structure was used as a common scan template. At every target distance, the complete O2 moiety was rigidly translated along the Fe-O-anchor direction and the remaining coordinates were optimized with ASE BFGS under a harmonic Fe-O restraint of `50 eV A^-2` (`fmax = 0.05 eV A^-1`, at most 200 steps). The target distances span `1.8-4.0 A` in `0.1 A` increments; the AFM `3.9 A` point is absent from both the DFT reference and plotted ML series. Magnetic conditioning at each distance was initialized from a branch-matched early configuration of the corresponding DFT constrained-relaxation trajectory and was held fixed during the static optimization; magnetic-moment rollout was disabled. Relative energies were aligned independently to the `d = 4.0 A` endpoint of each branch.
+
+The MAEs computed from the plotted DFT/ML pairs are:
+
+| Branch | Points | Energy (eV) | Fe moment (`mu_B`) | O2 total moment (`mu_B`) |
+|---|---:|---:|---:|---:|
+| AFM | 22 | 0.027229 | 0.007328 | 0.010210 |
+| FM | 23 | 0.007909 | 0.029556 | 0.016732 |
+
+The values and additional error statistics are provided in `examples/fen4/figure_data/pes_error_summary.csv`.
 
 ### Mn-Au-O2
 
