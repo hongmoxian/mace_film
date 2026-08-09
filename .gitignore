@@ -6,6 +6,8 @@ __pycache__/
 *.jsonl
 checkpoints/*/last.pt
 outputs/
+slurm-*.out
+*_film_md-*.out
+*_film_pes-*.out
 wandb/
 .DS_Store
-

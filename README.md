@@ -1,174 +1,142 @@
-# MACE-FiLM for spin-polarized surface dynamics
+# MACE-FiLM
 
-This repository is the compact code-and-data release accompanying the paper. It contains the magnetic-moment-conditioned MACE-FiLM implementation, training and ASE evaluation code, the final checkpoints used for the reported calculations, compressed training datasets, and the final paper figures with their plotted data.
+MACE-FiLM conditions a MACE potential on atom-resolved initial magnetic
+moments and predicts energies, forces, and local magnetic moments. This
+repository is a compact, code-oriented release: it contains the model and
+training implementations, portable ASE MD/PES examples, the checkpoints
+needed by those examples, and the workflow figure. Full paper figures and
+their processed plotting tables are intentionally not mirrored here.
 
-The release is organized by chemical system:
+![MACE-FiLM workflow](figures/workflow.png)
+
+## Repository layout
 
 ```text
-mace_film/                         # model, training, PES, and ASE-ML-MD source
-examples/fen4/                     # FeN4-O2 data, models, figures, and figure data
-examples/mn_au_o2/                 # Mn-Au-O2 data, models, figures, and figure data
-examples/ceo2/                     # CeO2 data, model, figures, and figure data
-figures/workflow.png               # overview figure
+mace_film/                    model, training, ASE MD, and PES source
+examples/fen4/                FeN4-O2 MD and PES examples
+examples/mn_au_o2/            Mn-Au-O2 MD and PES examples
+examples/ceo2/                CeO2 magnetic-localization MD example
+figures/workflow.png          paper workflow figure (Figure 1)
 ```
 
-## Model and data provenance
+Each example contains only:
 
-The labels used below are descriptive names for the magnetic-conditioning protocols:
+- checkpoint files needed for the demonstrated task;
+- small structural inputs and atomic-energy references;
+- a small `.extxyz.gz` sample documenting the training-data schema;
+- Slurm scripts for the retained MD/PES workflows;
+- a short system-specific README.
 
-- **Spp (previous)** propagates the predicted magnetic moments from one MD step to the next.
-- **Stp (rule)** resets a branch-consistent magnetic template at every step.
+The samples are not substitutes for the complete production datasets and
+must not be used to reproduce paper statistics.
 
-These labels describe the magnetic seed protocol, not a claim that one protocol is universally superior.
+Decompress a schema sample before passing it to the training entry point:
+
+```bash
+gzip -dk examples/fen4/inputs/train_sample.extxyz.gz
+```
+
+## Installation
+
+Install an upstream MACE version compatible with the source in this release,
+then install the remaining dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+export PYTHONPATH="/path/to/upstream/mace:$PWD:$PYTHONPATH"
+```
+
+The examples default to `/home/wuzhihong/software/mace` for the upstream MACE
+source. Override this portable path at submission time when needed:
+
+```bash
+MACE_SOURCE=/path/to/mace sbatch examples/fen4/scripts/run_md.slurm
+```
+
+## Retained workflows
 
 ### FeN4-O2
 
-The FeN4 PES and ML-MD figures were generated with different model families because the two calculations emphasize different regions of configuration space.
+- MD checkpoint: `examples/fen4/models/md_spp_previous_best.pt`
+- PES checkpoint: `examples/fen4/models/pes_afm_energy10_best.pt`
+- MD: `sbatch examples/fen4/scripts/run_md.slurm`
+- PES: `sbatch examples/fen4/scripts/run_pes.slurm`
 
-- **ML-MD:** `examples/fen4/models/md_spp_previous_best.pt` and `md_stp_rule_best.pt`, trained on the stride-4 AIMD datasets in `examples/fen4/data/md/`.
-- **PES:** the released `figures/pes.*` and `figure_data/pes_dft_ml.csv` use the same checkpoint for both spin branches: `examples/fen4/models/pes_afm_energy10_best.pt` (the manuscript "Old E10" model). Its bounded element-aware FiLM + ZBL parent model had already been trained on the combined AFM/FM AIMD, optimization, and PES data. The released checkpoint was then fine-tuned at `1e-5` learning rate for 30 epochs using the 308 AFM early constrained-optimization frames in `examples/fen4/data/pes/opt_vaspinit_afm_energy10_finetune.extxyz.gz` (290/9/9 train/validation/test split). The energy/force/atomic-moment/total-moment loss weights were 10/50/5/1. This is an AFM-focused fine-tune, not a model trained without FM information, and no branch-specific FM checkpoint is used in the reported figure.
-
-For each branch, one equilibrated AIMD structure was used as a common scan template. At every target distance, the complete O2 moiety was rigidly translated along the Fe-O-anchor direction and the remaining coordinates were optimized with ASE BFGS under a harmonic Fe-O restraint of `50 eV A^-2` (`fmax = 0.05 eV A^-1`, at most 200 steps). The target distances span `1.8-4.0 A` in `0.1 A` increments; the AFM `3.9 A` point is absent from both the DFT reference and plotted ML series. Magnetic conditioning at each distance was initialized from a branch-matched early configuration of the corresponding DFT constrained-relaxation trajectory and was held fixed during the static optimization; magnetic-moment rollout was disabled. Relative energies were aligned independently to the `d = 4.0 A` endpoint of each branch.
-
-The MAEs computed from the plotted DFT/ML pairs are:
-
-| Branch | Points | Energy (eV) | Fe moment (`mu_B`) | O2 total moment (`mu_B`) |
-|---|---:|---:|---:|---:|
-| AFM | 22 | 0.027229 | 0.007328 | 0.010210 |
-| FM | 23 | 0.007909 | 0.029556 | 0.016732 |
-
-The values and additional error statistics are provided in `examples/fen4/figure_data/pes_error_summary.csv`.
+The PES checkpoint is the Old E10 model selected for the manuscript. The
+same checkpoint is used for both AFM and FM PES branches; no branch-specific
+FM model is used. The MD and PES checkpoints differ because those workflows
+emphasize different regions of configuration space.
 
 ### Mn-Au-O2
 
-PES and ML-MD use the same model family. The release contains the previous/Spp and rule/Stp companion checkpoints:
+- common MD/PES checkpoint:
+  `examples/mn_au_o2/models/pes_md_spp_previous_best.pt`
+- MD: `sbatch examples/mn_au_o2/scripts/run_md.slurm`
+- PES: `sbatch examples/mn_au_o2/scripts/run_pes.slurm`
 
-- `examples/mn_au_o2/models/pes_md_spp_previous_best.pt`
-- `examples/mn_au_o2/models/pes_md_stp_rule_best.pt`
-
-Their associated AIMD, constrained-scan, and optimization data are in `examples/mn_au_o2/data/`. The PES scan uses the Mn-O distance restraint together with the angle restraint used for the reported calculation.
+The same previous-conditioned checkpoint is retained for the two example
+workflows.
 
 ### CeO2
 
-CeO2 uses one mixed training set and one final checkpoint:
+- MD checkpoint: `examples/ceo2/models/mixed_2O3O4O_softmax_best.pt`
+- MD: `sbatch examples/ceo2/scripts/run_md.slurm`
 
-- Model: `examples/ceo2/models/mixed_2O3O4O_softmax_best.pt`
-- Dataset: `examples/ceo2/data/mixed_2O3O4O_softmax.extxyz.gz`
+The checkpoint was trained on a mixed 2O/3O/4O dataset. The paper uses this
+system for magnetic-site localization and ML-MD, not for a static constrained
+PES scan; consequently no artificial CeO2 PES example is included.
 
-The mixed dataset contains 2O, 3O, and 4O configurations, including the cleaned 4O trajectory subset. The final main localization figure and the corresponding SI figure show the 2O system; this presentation choice does not mean that 3O and 4O were absent from training.
-
-## Source code
-
-The framework source is retained under `mace_film/`:
-
-- `mace_magmom_film.py`: magnetic-moment FiLM MACE model;
-- `train_fen4_mace_magmom_film.py`: FeN4 training entry point;
-- `run_md_mace_film.py`: ASE ML-MD with optional magnetic-moment rollout;
-- `scan_fe_o2_adsorption_mace_film.py`: constrained FeN4 PES scan;
-- `systems/mn_au_o2/`: Mn-Au-O2 training, MD, and PES entry points;
-- `systems/ceo2/`: CeO2 training and MD entry points.
-
-The system-specific model files are kept with their corresponding entry points so that the released scripts preserve the implementations used for each system.
-
-### Optional spin-inversion symmetry
-
-The framework provides an opt-in `--enforce-spin-inversion` flag. When enabled,
-the FiLM conditioning features generated from `m` and its global inverse `-m`
-are averaged before equivariant message passing, following the even-feature
-construction used in GemOC. For a geometry `R` and initial magnetic seed `m`,
-the conditioning layer forms:
+## Source entry points
 
 ```text
-h_even(R,m) = [h(R,m) + h(R,-m)] / 2
-E_even(R,m) = E(R,h_even)
+mace_film/mace_magmom_film.py
+mace_film/train_fen4_mace_magmom_film.py
+mace_film/run_md_mace_film.py
+mace_film/scan_fe_o2_adsorption_mace_film.py
+
+mace_film/systems/mn_au_o2/mace_magmom_film.py
+mace_film/systems/mn_au_o2/train_mn_au_mace_magmom_film.py
+mace_film/systems/mn_au_o2/run_md_mace_film.py
+mace_film/systems/mn_au_o2/scan_mn_au_o2_adsorption_mace_film.py
+
+mace_film/systems/ceo2/mace_magmom_film.py
+mace_film/systems/ceo2/train_ceo2_mace_magmom_film.py
+mace_film/systems/ceo2/run_md_mace_film.py
 ```
 
-Because `h_even(R,m) = h_even(R,-m)`, the energy path satisfies:
+All inference entry points accept `--atomic-energy-linref`. This overrides
+the historical absolute path stored inside a checkpoint and makes the
+released examples portable.
+
+## Magnetic conditioning
+
+The default model conditions the initial scalar node embedding with an
+atom-wise FiLM transformation derived from normalized initial magnetic
+moments. MD can optionally feed predicted moments into the next step with
+`--rollout-magmom`; PES examples keep the supplied branch template fixed
+unless explicitly configured otherwise.
+
+The optional `--enforce-spin-inversion` switch constructs an even FiLM
+conditioning feature from globally reversed magnetic seeds:
 
 ```text
-E_even(R,m) = E_even(R,-m)
+h_even(m) = [h(m) + h(-m)] / 2
+E(R, m) = E(R, -m)
 ```
 
-This does not add DFT structures or double the expensive MACE
-message-passing cost. Forces are obtained from the same energy by automatic
-differentiation:
+The switch is disabled by default. The released checkpoints and reported
+paper calculations therefore retain their original behavior.
 
-```text
-F_even(R,m) = - d E_even(R,m) / d R
-```
+## Scope of this release
 
-Therefore no separate force symmetrization is needed. The magnetic readout is
-not given an additional odd/even projection. For CeO2, the existing
-`--abs-initial-magmom` option already makes the FiLM input invariant to global
-sign reversal; when that option is active, the additional feature average is
-skipped. The default is disabled, so existing checkpoints and reported
-calculations remain unchanged.
+Removed from this GitHub repository:
 
-The switch is available during training:
+- paper PES/MD/statistical figures other than Figure 1;
+- figure-data CSV files;
+- full production training datasets;
+- raw VASP outputs and full AIMD/ML-MD trajectories;
+- exploratory checkpoints, training histories, and duplicated metadata.
 
-```bash
-python3 mace_film/train_fen4_mace_magmom_film.py \
-  --extxyz path/to/data.extxyz \
-  --save-dir checkpoints/spin_even \
-  --enforce-spin-inversion
-```
-
-For the base ASE MD and FeN4 PES drivers, use the same flag at evaluation time:
-
-```bash
-python3 mace_film/run_md_mace_film.py ... --enforce-spin-inversion
-python3 mace_film/scan_fe_o2_adsorption_mace_film.py ... --enforce-spin-inversion
-```
-
-The flag is disabled by default. Existing model checkpoints and previously
-reported calculations therefore use the original single-seed conditioning
-path unless the flag is explicitly enabled.
-
-## Quick checks
-
-Install the Python dependencies and make the package importable:
-
-```bash
-python3 -m pip install -r requirements.txt
-export PYTHONPATH="$PWD:$PYTHONPATH"
-```
-
-Inspect the available command-line options:
-
-```bash
-python3 mace_film/train_fen4_mace_magmom_film.py --help
-python3 mace_film/run_md_mace_film.py --help
-python3 mace_film/scan_fe_o2_adsorption_mace_film.py --help
-python3 mace_film/systems/mn_au_o2/train_mn_au_mace_magmom_film.py --help
-python3 mace_film/systems/mn_au_o2/run_md_mace_film.py --help
-python3 mace_film/systems/mn_au_o2/scan_mn_au_o2_adsorption_mace_film.py --help
-python3 mace_film/systems/ceo2/train_ceo2_mace_magmom_film.py --help
-python3 mace_film/systems/ceo2/run_md_mace_film.py --help
-```
-
-The `.extxyz.gz` files are compressed only for repository transport. Decompress the required file before passing it to ASE/MACE, for example:
-
-```bash
-gzip -dk examples/ceo2/data/mixed_2O3O4O_softmax.extxyz.gz
-```
-
-GPU training and production MD require a PyTorch installation compatible with the local CUDA driver and an importable upstream `mace` package. The supplied `.pt` files are the final checkpoints; the neighboring metrics and split-summary files record their evaluation metadata.
-
-## Figures and plotted data
-
-Each system directory contains:
-
-- `figures/`: final main-text and SI figures in PNG and PDF formats;
-- `figure_data/`: CSV files used to generate the figures;
-- `models/`: checkpoints and compact training/test metadata;
-- `data/`: the associated compressed datasets and dataset summaries.
-
-The exact model/data mapping for the PES and ML-MD figures is documented above. `MANIFEST.csv` records the byte size and SHA256 hash of every other tracked release file.
-
-## Deliberate exclusions
-
-To keep this repository focused and practical to clone, it does not contain raw VASP `OUTCAR` files, raw AIMD trajectory directories, full ML-MD trajectory dumps, Slurm logs, resume checkpoints such as `last.pt`, or obsolete exploratory scan/plot outputs. These files are not required to inspect the final figures or use the released model/data package and should be archived separately when complete raw-data deposition is needed.
-
-## Citation and license
-
-Please cite the accompanying paper when using the code, checkpoints, datasets, or figures. Add the project license here before public release if a repository-level license is required.
+Complete paper data should be deposited separately in a persistent research
+data archive. See `DATA_AVAILABILITY.md` and `MANIFEST.csv` for the retained
+release contents and checksums.

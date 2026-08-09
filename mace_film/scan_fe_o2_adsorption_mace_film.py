@@ -587,6 +587,11 @@ def main() -> None:
         help="Comma-separated scan distances to skip, e.g. 3.9 or 3.9,4.1.",
     )
     parser.add_argument("--device", default="cuda")
+    parser.add_argument(
+        "--atomic-energy-linref",
+        default=None,
+        help="Portable override for the atomic-energy reference path stored in the checkpoint.",
+    )
     parser.add_argument("--restraint-k", type=float, default=50.0)
     parser.add_argument(
         "--angle-restraint-k",
@@ -872,6 +877,7 @@ def main() -> None:
                 device=args.device,
                 init_magmom=init_magmoms,
                 rollout_magmom=args.rollout_magmom,
+                atomic_energy_linref=args.atomic_energy_linref,
                 enforce_spin_inversion=args.enforce_spin_inversion,
                 fe_index=args.fe_index,
                 anchor_o_index=anchor,

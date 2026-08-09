@@ -137,11 +137,14 @@ class MACEFilmMDCalculator(Calculator):
         init_magmom=None,
         rollout_magmom=True,
         atomic_numbers=None,
+        atomic_energy_linref=None,
     ):
         super().__init__()
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
         payload = torch.load(checkpoint, map_location=self.device)
         args = SimpleNamespace(**payload["args"])
+        if atomic_energy_linref is not None:
+            args.atomic_energy_linref = str(atomic_energy_linref)
         z_values = atomic_numbers
         if z_values is None:
             z_values = getattr(args, "atomic_numbers", None)
@@ -298,6 +301,11 @@ def parse_args():
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--atomic-numbers", type=int, nargs="+", default=None)
+    parser.add_argument(
+        "--atomic-energy-linref",
+        default=None,
+        help="Portable override for the atomic-energy reference path stored in the checkpoint.",
+    )
     parser.add_argument("--temperature-k", type=float, default=50.0)
     parser.add_argument("--timestep-fs", type=float, default=1.0)
     parser.add_argument(
@@ -342,6 +350,7 @@ def main():
         init_magmom=init_magmoms,
         rollout_magmom=args.rollout_magmom,
         atomic_numbers=args.atomic_numbers,
+        atomic_energy_linref=args.atomic_energy_linref,
     )
     atoms.calc = calc
 

@@ -1,16 +1,22 @@
 # Data availability
 
-This repository is a compact release of the MACE-FiLM code and the data used for the paper figures.
+This GitHub repository is a compact software and model release. It includes:
 
-Included:
+- the MACE-FiLM model and training implementations;
+- portable ASE MD and constrained-PES scripts;
+- the checkpoints used by the retained examples;
+- small structures, atomic-energy references, and training-schema samples;
+- the paper workflow figure (Figure 1).
 
-- compressed system datasets in `examples/*/data/`;
-- final checkpoints and compact training/test metadata in `examples/*/models/`;
-- final PNG/PDF figures and the CSV data used to plot them;
-- the retained MACE-FiLM training, PES-scan, and ASE ML-MD source code.
+It intentionally excludes the full production datasets, raw VASP outputs,
+complete AIMD/ML-MD trajectories, processed paper plotting tables, and all
+paper figures other than the workflow. Those research artifacts should be
+deposited in a persistent data repository rather than duplicated in the
+software repository.
 
-The FeN4 release contains separate PES and ML-MD model families. The Mn-Au-O2 release contains the common model family used for both PES and ML-MD. The CeO2 release contains the mixed 2O/3O/4O training dataset and its final checkpoint.
+The `.extxyz.gz` files under `examples/*/inputs/` contain only a few frames
+for inspecting the required arrays and metadata. They are not statistically
+representative datasets and cannot reproduce reported training or paper
+metrics.
 
-Raw VASP files, raw AIMD/ML-MD trajectory directories, Slurm logs, resume checkpoints, and discarded exploratory outputs are intentionally omitted from this GitHub package. They should be deposited in a persistent research-data archive if complete raw-trajectory reproducibility is required.
-
-SHA256 checksums for the released files are recorded in `MANIFEST.csv`.
+`MANIFEST.csv` records the size and SHA256 checksum of every retained file.

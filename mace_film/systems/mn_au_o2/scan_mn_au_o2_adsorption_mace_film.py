@@ -300,6 +300,11 @@ def main() -> None:
     parser.add_argument("--atomic-numbers", type=int, nargs="+", default=[8, 25, 79])
     parser.add_argument("--scan-distance-range", default="1.8:4.0:0.1")
     parser.add_argument("--device", default="cuda")
+    parser.add_argument(
+        "--atomic-energy-linref",
+        default=None,
+        help="Portable override for the atomic-energy reference path stored in the checkpoint.",
+    )
     parser.add_argument("--distance-k", type=float, default=50.0)
     parser.add_argument("--use-angle-restraint", action="store_true")
     parser.add_argument("--angle-k", type=float, default=20.0)
@@ -414,6 +419,7 @@ def main() -> None:
                 init_magmom=init_magmoms,
                 rollout_magmom=True,
                 atomic_numbers=args.atomic_numbers,
+                atomic_energy_linref=args.atomic_energy_linref,
                 mn_index=args.mn_index,
                 anchor_o_index=anchor,
                 other_o_index=other,
