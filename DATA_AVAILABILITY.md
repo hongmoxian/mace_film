@@ -32,3 +32,12 @@ was not enabled for the primary paper MD/PES calculations.
 
 The updated architecture diagram is in figures/workflow.png with its
 editable SVG and reproducible rendering script also provided.
+
+## Licensing of repository assets
+
+The original source code, examples, documentation, and workflow
+illustrations distributed by the MACE-FiLM maintainers are provided
+under the repository's MIT License, to the extent the maintainers hold
+the required distribution and licensing rights. External dependencies
+and any third-party materials retain their own terms; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

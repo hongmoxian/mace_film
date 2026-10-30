@@ -231,3 +231,16 @@ replace the full scientific training sets.
 Complete paper data should be deposited separately in a persistent research
 data archive. See `DATA_AVAILABILITY.md` and `MANIFEST.csv` for the retained
 release contents and checksums.
+
+## License and attribution
+
+MACE-FiLM is released under the **MIT License**. See
+[LICENSE](LICENSE) for the permissions, conditions, and disclaimer.
+Copyright (c) 2026 hongmoxian and contributors.
+
+This project builds on the [MACE](https://github.com/ACEsuit/mace)
+framework, which is distributed under the MIT License. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for upstream attribution.
+Third-party dependencies retain their original licenses. The repository
+contains small example datasets and pretrained checkpoints; their
+provenance and scope are described in [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md).
