@@ -20,6 +20,7 @@ mkdir -p "${OUT}"
 
 "${PYTHON}" "${ROOT}/mace_film/systems/mn_au_o2/scan_mn_au_o2_adsorption_mace_film.py" \
   --checkpoint "${ROOT}/examples/mn_au_o2/models/pes_md_spp_previous_best.pt" \
+  --mode mtc \
   --atomic-energy-linref "${ROOT}/examples/mn_au_o2/inputs/atomic_energy_linref.json" \
   --model-spec "AFM|${ROOT}/examples/mn_au_o2/inputs/afm_template.extxyz|0|0" \
   --model-spec "FM|${ROOT}/examples/mn_au_o2/inputs/fm_template.extxyz|0|1" \

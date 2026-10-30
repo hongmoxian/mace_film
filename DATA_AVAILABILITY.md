@@ -20,3 +20,15 @@ representative datasets and cannot reproduce reported training or paper
 metrics.
 
 `MANIFEST.csv` records the size and SHA256 checksum of every retained file.
+
+## Optional symmetry extension example
+
+The repository also includes one FeN4/O2 fixed-geometry example, a
+configuration with redacted/portable data paths and a trained
+single-forward even_pair checkpoint under examples/even_pair/. These
+assets support a quick property test of global magnetic reversal but
+do not reproduce the scientific training results. Optional symmetry
+was not enabled for the primary paper MD/PES calculations.
+
+The updated architecture diagram is in figures/workflow.png with its
+editable SVG and reproducible rendering script also provided.
