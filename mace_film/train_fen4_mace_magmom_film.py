@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from ase.data import atomic_numbers as ASE_ATOMIC_NUMBERS
 from e3nn import o3
 
 from mace import data as mace_data
@@ -25,12 +26,18 @@ class EnergyForceMagmomLoss(torch.nn.Module):
         magmom_w=100.0,
         total_magmom_w=1.0,
         loss_type="l1",
+        magmom_supervise_element_indices=None,
     ):
         super().__init__()
         self.energy_w = float(energy_w)
         self.force_w = float(force_w)
         self.magmom_w = float(magmom_w)
         self.total_magmom_w = float(total_magmom_w)
+        self.magmom_supervise_element_indices = (
+            None
+            if magmom_supervise_element_indices is None
+            else tuple(int(i) for i in magmom_supervise_element_indices)
+        )
         loss_type = str(loss_type).strip().lower()
         if loss_type not in {"l1", "smoothl1"}:
             raise ValueError(f"Unsupported loss_type={loss_type!r}")
@@ -48,15 +55,37 @@ class EnergyForceMagmomLoss(torch.nn.Module):
             torch.zeros_like(ref.energy),
         )
         force_loss = self._elem_loss(pred["forces"], ref.forces)
+        if pred.get("magmom") is None:
+            if self.magmom_w != 0 or self.total_magmom_w != 0:
+                raise ValueError("A disabled magnetic head requires both magnetic loss weights to be zero")
+            unavailable = energy_loss.new_tensor(float("nan"))
+            total = self.energy_w * energy_loss + self.force_w * force_loss
+            return total, energy_loss, force_loss, unavailable, unavailable
         target_mag = ref.target_magmom.reshape(-1).to(pred["magmom"].dtype)
-        magmom_loss = self._elem_loss(pred["magmom"].reshape(-1), target_mag)
+        pred_mag = pred["magmom"].reshape(-1)
+        if self.magmom_supervise_element_indices is None:
+            supervised_pred = pred_mag
+            supervised_target = target_mag
+        else:
+            atom_types = ref.node_attrs.argmax(dim=-1)
+            selected_types = torch.as_tensor(
+                self.magmom_supervise_element_indices,
+                device=atom_types.device,
+                dtype=atom_types.dtype,
+            )
+            selected_atoms = (atom_types[:, None] == selected_types[None, :]).any(dim=1)
+            if not torch.any(selected_atoms):
+                raise ValueError("The batch contains no atoms selected for magmom supervision")
+            supervised_pred = pred_mag[selected_atoms]
+            supervised_target = target_mag[selected_atoms]
+        magmom_loss = self._elem_loss(supervised_pred, supervised_target)
         graph_index = torch.repeat_interleave(
             torch.arange(len(natoms), device=pred["magmom"].device),
             natoms.to(pred["magmom"].device),
         )
         pred_total = torch.zeros(len(natoms), device=pred["magmom"].device, dtype=pred["magmom"].dtype)
         targ_total = torch.zeros_like(pred_total)
-        pred_total.index_add_(0, graph_index, pred["magmom"].reshape(-1))
+        pred_total.index_add_(0, graph_index, pred_mag)
         targ_total.index_add_(0, graph_index, target_mag)
         total_magmom_loss = self._elem_loss(pred_total, targ_total)
         total = (
@@ -78,6 +107,9 @@ def _load_configs(
     test_fraction,
     seed,
     max_initial_equals_target_fraction,
+    require_initial_magmom=True,
+    split_manifest=None,
+    require_target_magmom=True,
 ):
     key_spec = mace_data.KeySpecification.from_defaults()
     key_spec.arrays_keys["initial_magmom"] = "initial_magmom"
@@ -91,10 +123,13 @@ def _load_configs(
         extract_atomic_energies=False,
         keep_isolated_atoms=True,
     )
-    _check_magmom_initialization(
-        configs,
-        max_equal_fraction=max_initial_equals_target_fraction,
-    )
+    if require_initial_magmom and require_target_magmom:
+        _check_magmom_initialization(
+            configs,
+            max_equal_fraction=max_initial_equals_target_fraction,
+        )
+    if split_manifest is not None:
+        return _configs_from_split_manifest(configs, split_manifest)
     by_state = {}
     for idx, cfg in enumerate(configs):
         state = cfg.properties.get("state_id", "unknown")
@@ -130,6 +165,37 @@ def _load_configs(
             "num_total": n_total,
         }
     return train, val, test, split_summary
+
+
+def _configs_from_split_manifest(configs, path):
+    """Load a frozen, externally grouped partition using zero-based frame indices."""
+    with Path(path).open(encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    if not isinstance(manifest, dict):
+        raise ValueError("Split manifest must be a JSON object")
+    names = ("train", "val", "test")
+    indices = []
+    partitions = []
+    summary = {}
+    for name in names:
+        selected = manifest.get(name)
+        if not isinstance(selected, list) or not selected:
+            raise ValueError(f"Split manifest needs a nonempty {name!r} index list")
+        if any(type(i) is not int or i < 0 or i >= len(configs) for i in selected):
+            raise ValueError(f"Invalid frame index in split {name!r}")
+        indices.extend(selected)
+        partition = [configs[i] for i in selected]
+        partitions.append(partition)
+        for cfg in partition:
+            state = str(cfg.properties.get("state_id", "unknown"))
+            item = summary.setdefault(state, {
+                "num_train": 0, "num_val": 0, "num_test": 0, "num_total": 0,
+            })
+            item[f"num_{name}"] += 1
+            item["num_total"] += 1
+    if len(indices) != len(set(indices)) or set(indices) != set(range(len(configs))):
+        raise ValueError("Split manifest must assign every frame exactly once")
+    return *partitions, summary
 
 
 def _check_magmom_initialization(configs, max_equal_fraction=0.05):
@@ -195,10 +261,14 @@ def _infer_atomic_number_table(config_groups):
     return AtomicNumberTable(ordered)
 
 
-def _attach_magmom_fields(data, cfg):
+def _attach_magmom_fields(data, cfg, require_initial_magmom=True, require_target_magmom=True):
     # MACE AtomicData only keeps recognized fields by default. Preserve the
     # magnetic conditioning/target arrays explicitly for PyG batching.
     for key in ("initial_magmom", "target_magmom"):
+        if key == "initial_magmom" and not require_initial_magmom:
+            continue
+        if key == "target_magmom" and not require_target_magmom:
+            continue
         if key not in cfg.properties or cfg.properties[key] is None:
             raise KeyError(f"Configuration is missing required {key!r}")
         values = np.asarray(cfg.properties[key], dtype=float).reshape(-1)
@@ -210,7 +280,7 @@ def _attach_magmom_fields(data, cfg):
     return data
 
 
-def _to_atomic_dataset(configs, z_table, cutoff):
+def _to_atomic_dataset(configs, z_table, cutoff, require_initial_magmom=True, require_target_magmom=True):
     dataset = []
     for cfg in configs:
         data = mace_data.AtomicData.from_config(
@@ -219,7 +289,9 @@ def _to_atomic_dataset(configs, z_table, cutoff):
             cutoff=cutoff,
             heads=["Default"],
         )
-        dataset.append(_attach_magmom_fields(data, cfg))
+        dataset.append(_attach_magmom_fields(
+            data, cfg, require_initial_magmom, require_target_magmom
+        ))
     return dataset
 
 
@@ -299,6 +371,24 @@ def _compute_magmom_scale(configs, z_table):
     return scale
 
 
+def _resolve_element_filter(elements, z_table, option_name):
+    if elements is None:
+        return None
+    resolved = []
+    for symbol in elements:
+        symbol = str(symbol).strip()
+        if symbol not in ASE_ATOMIC_NUMBERS:
+            raise ValueError(f"{option_name}: unknown element symbol {symbol!r}")
+        resolved.append(int(ASE_ATOMIC_NUMBERS[symbol]))
+    if len(set(resolved)) != len(resolved):
+        raise ValueError(f"{option_name}: element symbols must not be repeated")
+    available = {int(z) for z in z_table.zs}
+    missing = sorted(set(resolved).difference(available))
+    if missing:
+        raise ValueError(f"{option_name}: requested elements absent from dataset, Z={missing}")
+    return resolved
+
+
 def _build_model(args, z_table):
     hidden_irreps = o3.Irreps(args.hidden_irreps)
     atomic_energies = _load_atomic_energies(args.atomic_energy_linref, z_table)
@@ -326,6 +416,12 @@ def _build_model(args, z_table):
             ),
             "enforce_spin_inversion": bool(
                 getattr(args, "enforce_spin_inversion", False)
+            ),
+            "spin_feature_mode": str(getattr(args, "spin_feature_mode", "legacy")),
+            "predict_magmom": not getattr(args, "no_magmom_head", False),
+            "compact_conditioning": getattr(args, "compact_conditioning", False),
+            "magmom_condition_atomic_numbers": getattr(
+                args, "magmom_condition_atomic_numbers", None
             ),
         },
         flush=True,
@@ -358,6 +454,12 @@ def _build_model(args, z_table):
         magmom_input_clip=getattr(args, "magmom_input_clip", None),
         film_element_embedding_dim=getattr(args, "film_element_embedding_dim", 0),
         enforce_spin_inversion=getattr(args, "enforce_spin_inversion", False),
+        spin_feature_mode=getattr(args, "spin_feature_mode", "legacy"),
+        predict_magmom=not getattr(args, "no_magmom_head", False),
+        compact_conditioning=getattr(args, "compact_conditioning", False),
+        magmom_condition_atomic_numbers=getattr(
+            args, "magmom_condition_atomic_numbers", None
+        ),
     )
 
 
@@ -409,10 +511,30 @@ def main():
     parser.add_argument("--val-fraction", type=float, default=0.1)
     parser.add_argument("--test-fraction", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument(
+        "--split-seed", type=int, default=None,
+        help="Independent data split seed. Omit to keep the existing --seed behavior.",
+    )
+    parser.add_argument(
+        "--split-manifest", default=None,
+        help="JSON with train/val/test frame-index lists; overrides random splitting.",
+    )
+    parser.add_argument(
+        "--loader-seed", type=int, default=None,
+        help="Independent training shuffle seed. Omit to retain the existing RNG behavior.",
+    )
     parser.add_argument("--energy-w", type=float, default=1.0)
     parser.add_argument("--force-w", type=float, default=100.0)
     parser.add_argument("--magmom-w", type=float, default=100.0)
     parser.add_argument("--total-magmom-w", type=float, default=1.0)
+    parser.add_argument(
+        "--magmom-condition-elements", nargs="+", default=None,
+        help="Limit magnetic input conditioning to these elements (symbols); default conditions all atoms.",
+    )
+    parser.add_argument(
+        "--magmom-supervise-elements", nargs="+", default=None,
+        help="Limit atom-wise magnetic-moment loss to these elements; default supervises all atoms.",
+    )
     parser.add_argument(
         "--loss-type",
         choices=["l1", "smoothl1"],
@@ -429,13 +551,26 @@ def main():
     parser.add_argument("--use-zbl", action="store_true")
     parser.add_argument(
         "--conditioning-mode",
-        choices=["film", "residual_film", "concat"],
+        choices=["none", "film", "residual_film", "concat"],
         default="film",
         help=(
-            "Magmom conditioning mode. 'film' keeps the existing behavior; "
+            "Magmom conditioning mode. 'none' bypasses all magnetic inputs; "
+            "'film' keeps the existing behavior; "
             "'residual_film' weakens it; 'concat' replaces modulation with "
             "a concat+projection style condition."
         ),
+    )
+    parser.add_argument(
+        "--no-magmom-head", action="store_true",
+        help="Remove the magnetic prediction head; requires --magmom-w 0 --total-magmom-w 0.",
+    )
+    parser.add_argument(
+        "--compact-conditioning", action="store_true",
+        help="Omit the unused FiLM module in concat mode. Default retains legacy checkpoint keys.",
+    )
+    parser.add_argument(
+        "--magmom-scale-from", choices=["train", "train-val"], default="train-val",
+        help="Normalization data source. Default preserves existing training behavior.",
     )
     parser.add_argument(
         "--film-scale",
@@ -471,12 +606,17 @@ def main():
         ),
     )
     parser.add_argument(
+        "--spin-feature-mode",
+        choices=["legacy", "even_pair"],
+        default="legacy",
+        help="even_pair uses globally spin-even FiLM inputs and spin-odd moment output in one forward.",
+    )
+    parser.add_argument(
         "--enforce-spin-inversion",
         action="store_true",
         help=(
-            "Average FiLM conditioning features generated from m and -m before "
-            "message passing, enforcing even energy under global spin inversion "
-            "with one full MACE evaluation."
+            "Evaluate each geometry with m and -m and use the even energy/force "
+            "projection. Magnetic readout remains seed-conditioned."
         ),
     )
     parser.add_argument(
@@ -513,6 +653,8 @@ def main():
         help="Optional checkpoint to initialize model weights before training.",
     )
     args = parser.parse_args()
+    if args.no_magmom_head and (args.magmom_w != 0 or args.total_magmom_w != 0):
+        parser.error("--no-magmom-head requires --magmom-w 0 --total-magmom-w 0")
 
     frac_sum = args.train_fraction + args.val_fraction + args.test_fraction
     if abs(frac_sum - 1.0) > 1e-6:
@@ -532,22 +674,46 @@ def main():
         args.train_fraction,
         args.val_fraction,
         args.test_fraction,
-        args.seed,
+        args.seed if args.split_seed is None else args.split_seed,
         args.max_initial_equals_target_fraction,
+        require_initial_magmom=args.conditioning_mode != "none",
+        split_manifest=args.split_manifest,
+        require_target_magmom=not args.no_magmom_head,
     )
     z_table = _infer_atomic_number_table([train_configs, val_configs, test_configs])
-    args.magmom_scale = _compute_magmom_scale(
-        train_configs + val_configs, z_table
+    args.magmom_condition_atomic_numbers = _resolve_element_filter(
+        args.magmom_condition_elements, z_table, "--magmom-condition-elements"
     )
-    train_ds = _to_atomic_dataset(train_configs, z_table, args.cutoff)
-    val_ds = _to_atomic_dataset(val_configs, z_table, args.cutoff)
-    test_ds = _to_atomic_dataset(test_configs, z_table, args.cutoff)
+    supervised_atomic_numbers = _resolve_element_filter(
+        args.magmom_supervise_elements, z_table, "--magmom-supervise-elements"
+    )
+    args.magmom_supervise_element_indices = (
+        None
+        if supervised_atomic_numbers is None
+        else [list(map(int, z_table.zs)).index(z) for z in supervised_atomic_numbers]
+    )
+    if args.conditioning_mode == "none":
+        args.magmom_scale = [1.0] * len(z_table)
+    else:
+        scale_configs = train_configs if args.magmom_scale_from == "train" else train_configs + val_configs
+        args.magmom_scale = _compute_magmom_scale(scale_configs, z_table)
+    dataset_kwargs = {
+        "require_initial_magmom": args.conditioning_mode != "none",
+        "require_target_magmom": not args.no_magmom_head,
+    }
+    train_ds = _to_atomic_dataset(train_configs, z_table, args.cutoff, **dataset_kwargs)
+    val_ds = _to_atomic_dataset(val_configs, z_table, args.cutoff, **dataset_kwargs)
+    test_ds = _to_atomic_dataset(test_configs, z_table, args.cutoff, **dataset_kwargs)
 
+    loader_kwargs = {}
+    if args.loader_seed is not None:
+        loader_kwargs["generator"] = torch.Generator().manual_seed(args.loader_seed)
     train_loader = torch_geometric.dataloader.DataLoader(
         train_ds,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
+        **loader_kwargs,
     )
     val_loader = torch_geometric.dataloader.DataLoader(
         val_ds,
@@ -586,6 +752,7 @@ def main():
         args.magmom_w,
         args.total_magmom_w,
         args.loss_type,
+        args.magmom_supervise_element_indices,
     )
 
     if not args.test_only:

@@ -30,6 +30,10 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         magmom_input_clip: Optional[float] = None,
         film_element_embedding_dim: int = 0,
         enforce_spin_inversion: bool = False,
+        spin_feature_mode: str = "legacy",
+        predict_magmom: bool = True,
+        compact_conditioning: bool = False,
+        magmom_condition_atomic_numbers: Optional[List[int]] = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -38,16 +42,43 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         self.conditioning_mode = str(conditioning_mode or "film").strip().lower()
         self.film_scale = float(film_scale)
         self.film_use_tanh = bool(film_use_tanh)
-        # When enabled, symmetrize the FiLM conditioning map for m and -m
-        # before message passing, following the GemOC even-feature pattern.
         self.enforce_spin_inversion = bool(enforce_spin_inversion)
+        self.spin_feature_mode = str(spin_feature_mode).strip().lower()
+        if self.spin_feature_mode not in {"legacy", "even_pair"}:
+            raise ValueError("spin_feature_mode must be legacy or even_pair")
+        if self.spin_feature_mode == "even_pair" and self.enforce_spin_inversion:
+            raise ValueError("even_pair already enforces global reversal: disable double-forward averaging")
+        if self.spin_feature_mode == "even_pair" and self.conditioning_mode == "none":
+            raise ValueError("even_pair requires active magnetic FiLM or concat conditioning")
+        self.spin_cutoff = float(kwargs.get("r_max", 5.0))
+        if self.spin_cutoff <= 0:
+            raise ValueError("r_max must be positive")
+        self.predict_magmom = bool(predict_magmom)
+        self.compact_conditioning = bool(compact_conditioning)
+        atomic_numbers = [int(z) for z in self.atomic_numbers]
+        if magmom_condition_atomic_numbers is None:
+            condition_element_mask = torch.ones(len(atomic_numbers), dtype=torch.bool)
+        else:
+            selected_numbers = {int(z) for z in magmom_condition_atomic_numbers}
+            missing = sorted(selected_numbers.difference(atomic_numbers))
+            if missing:
+                raise ValueError(
+                    "Magmom conditioning elements are absent from the model species: "
+                    f"Z={missing}"
+                )
+            condition_element_mask = torch.tensor(
+                [z in selected_numbers for z in atomic_numbers], dtype=torch.bool
+            )
+        self.register_buffer(
+            "magmom_condition_element_mask", condition_element_mask, persistent=False
+        )
         self.magmom_input_clip = (
             None if magmom_input_clip is None else float(magmom_input_clip)
         )
-        if self.conditioning_mode not in {"film", "residual_film", "concat"}:
+        if self.conditioning_mode not in {"none", "film", "residual_film", "concat"}:
             raise ValueError(
                 f"Unsupported conditioning_mode={conditioning_mode!r}. "
-                "Expected one of 'film', 'residual_film', 'concat'."
+                "Expected one of 'none', 'film', 'residual_film', 'concat'."
             )
 
         num_elements = len(self.atomic_numbers)
@@ -69,19 +100,25 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         scalar_dim = self.node_embedding.linear.irreps_out.count(o3.Irrep(0, 1))
         self._initial_scalar_dim = int(scalar_dim)
         self.film_element_embedding_dim = int(film_element_embedding_dim)
-        if self.film_element_embedding_dim > 0:
+        if self.film_element_embedding_dim > 0 and self.conditioning_mode != "none":
             self.film_element_embedding = torch.nn.Embedding(
                 num_elements,
                 self.film_element_embedding_dim,
             )
         else:
             self.film_element_embedding = None
-        film_input_dim = 1 + max(self.film_element_embedding_dim, 0)
-        self.magmom_film = torch.nn.Sequential(
-            torch.nn.Linear(film_input_dim, magmom_hidden_dim),
-            torch.nn.SiLU(),
-            torch.nn.Linear(magmom_hidden_dim, 2 * self._initial_scalar_dim),
-        )
+        film_input_dim = (2 if self.spin_feature_mode == "even_pair" else 1) + max(self.film_element_embedding_dim, 0)
+        # Keep legacy initialization order and checkpoint keys unless opted out.
+        if self.conditioning_mode == "none" or (
+            self.conditioning_mode == "concat" and self.compact_conditioning
+        ):
+            self.magmom_film = None
+        else:
+            self.magmom_film = torch.nn.Sequential(
+                torch.nn.Linear(film_input_dim, magmom_hidden_dim),
+                torch.nn.SiLU(),
+                torch.nn.Linear(magmom_hidden_dim, 2 * self._initial_scalar_dim),
+            )
         if self.conditioning_mode == "concat":
             self.magmom_concat_proj = torch.nn.Sequential(
                 torch.nn.Linear(self._initial_scalar_dim + film_input_dim, magmom_hidden_dim),
@@ -104,17 +141,63 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         if final_scalar_dim <= 0:
             # Fallback for unusual MACE settings.
             final_scalar_dim = self._initial_scalar_dim
-        self.magmom_readout = torch.nn.Sequential(
-            torch.nn.Linear(int(final_scalar_dim), magmom_hidden_dim),
-            torch.nn.SiLU(),
-            torch.nn.Linear(magmom_hidden_dim, 1),
-        )
+        if self.predict_magmom:
+            self.magmom_readout = torch.nn.Sequential(
+                torch.nn.Linear(int(final_scalar_dim), magmom_hidden_dim),
+                torch.nn.SiLU(),
+                torch.nn.Linear(magmom_hidden_dim, 2 if self.spin_feature_mode == "even_pair" else 1),
+            )
+        else:
+            self.magmom_readout = None
+
+    def _compute_spin_features(
+        self,
+        data: Dict[str, torch.Tensor],
+        lengths: torch.Tensor,
+    ):
+        """Time-reversal EVEN FiLM features and ODD moment bases.
+
+        No fixed chemical species or spin-reference atom is required.
+        q_i = m_i * weighted_mean_j(m_j), both m normalized/optionally clipped.
+        Distances and their gradients are retained for conservative forces.
+        """
+        node_attrs = data["node_attrs"]
+        element_idx = node_attrs.argmax(dim=-1)
+        m = data[self.magmom_key].reshape(-1).to(node_attrs.dtype)
+        scale = self.magmom_scale[element_idx].to(m.dtype)
+        norm = m / (scale + 1e-8)
+        if self.magmom_input_clip is not None:
+            norm = norm.clamp(-self.magmom_input_clip, self.magmom_input_clip)
+        mask = self.magmom_condition_element_mask[element_idx].to(m.dtype)
+        norm = norm * mask
+
+        # edge_index[0] -> edge_index[1]; accumulate incoming neighbor moments.
+        src, dst = data["edge_index"]
+        r = lengths.reshape(-1).to(norm.dtype)
+        if r.numel() != src.numel():
+            raise ValueError("lengths/edge_index size mismatch")
+        weight = torch.clamp(1.0 - r / self.spin_cutoff, min=0.0).square()
+        weight = weight * mask[src] * mask[dst]
+        weighted_m = weight * norm[src]
+        n = norm.shape[0]
+        neighbor_sum = torch.zeros(n, dtype=norm.dtype, device=norm.device)
+        weight_sum = torch.zeros_like(neighbor_sum)
+        neighbor_sum.index_add_(0, dst, weighted_m)
+        weight_sum.index_add_(0, dst, weight)
+        neighbor_m = neighbor_sum / (weight_sum + 1e-8)
+
+        even_features = torch.stack((norm.square(), norm * neighbor_m), dim=-1)
+        odd_bases = torch.stack((norm, neighbor_m), dim=-1)
+        return even_features, odd_bases
 
     def _apply_initial_magmom_film(
         self,
         node_feats: torch.Tensor,
         data: Dict[str, torch.Tensor],
+        even_features: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        if self.conditioning_mode == "none":
+            return node_feats
         if self.magmom_key not in data:
             raise KeyError(
                 f"Missing atom-wise magnetic initialization field {self.magmom_key!r}."
@@ -129,42 +212,31 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
                 min=-self.magmom_input_clip,
                 max=self.magmom_input_clip,
             )
-        film_input = normalized_magmom
+        if self.spin_feature_mode == "even_pair":
+            if even_features is None:
+                raise ValueError("Missing even magnetic features")
+            film_input = even_features.to(node_feats.dtype)
+        else:
+            film_input = normalized_magmom
         if self.film_element_embedding is not None:
             elem_feat = self.film_element_embedding(element_idx).to(node_feats.dtype)
-            film_input = torch.cat([normalized_magmom, elem_feat], dim=-1)
-
-        if self.enforce_spin_inversion:
-            inverted_input = -normalized_magmom
-            if self.film_element_embedding is not None:
-                inverted_input = torch.cat([inverted_input, elem_feat], dim=-1)
+            film_input = torch.cat([film_input, elem_feat], dim=-1)
 
         if self.conditioning_mode == "concat":
             conditioned_scalar = self.magmom_concat_proj(
                 torch.cat([node_feats[:, : self._initial_scalar_dim], film_input], dim=-1)
             )
-            if self.enforce_spin_inversion:
-                conditioned_scalar = 0.5 * (
-                    conditioned_scalar
-                    + self.magmom_concat_proj(
-                        torch.cat(
-                            [
-                                node_feats[:, : self._initial_scalar_dim],
-                                inverted_input,
-                            ],
-                            dim=-1,
-                        )
-                    )
-                )
+            selected_atoms = self.magmom_condition_element_mask[element_idx].unsqueeze(-1)
+            conditioned_scalar = torch.where(
+                selected_atoms,
+                conditioned_scalar,
+                node_feats[:, : self._initial_scalar_dim],
+            )
             if node_feats.shape[-1] == self._initial_scalar_dim:
                 return conditioned_scalar
             return torch.cat([conditioned_scalar, node_feats[:, self._initial_scalar_dim :]], dim=-1)
 
         gamma_beta = self.magmom_film(film_input)
-        if self.enforce_spin_inversion:
-            gamma_beta = 0.5 * (
-                gamma_beta + self.magmom_film(inverted_input)
-            )
         gamma_raw, beta_raw = gamma_beta.chunk(2, dim=-1)
         if self.film_use_tanh:
             gamma_raw = torch.tanh(gamma_raw)
@@ -177,6 +249,10 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
             ) * self.film_scale
         else:
             conditioned = node_feats[:, : self._initial_scalar_dim] * gamma + beta
+        selected_atoms = self.magmom_condition_element_mask[element_idx].unsqueeze(-1)
+        conditioned = torch.where(
+            selected_atoms, conditioned, node_feats[:, : self._initial_scalar_dim]
+        )
         if node_feats.shape[-1] == self._initial_scalar_dim:
             return conditioned
         return torch.cat([conditioned, node_feats[:, self._initial_scalar_dim :]], dim=-1)
@@ -187,7 +263,8 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
             feat_idx = -1 if len(self._readout_scalar_dims) == 1 else readout_idx
             feats = node_feats_list[feat_idx]
             scalar_features.append(feats[:, :scalar_dim])
-        return self.magmom_readout(torch.cat(scalar_features, dim=-1)).reshape(-1)
+        values = self.magmom_readout(torch.cat(scalar_features, dim=-1))
+        return values if self.spin_feature_mode == "even_pair" else values.reshape(-1)
 
     def _forward_single(
         self,
@@ -234,8 +311,12 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
             src=node_e0, index=data["batch"], dim=0, dim_size=num_graphs
         ).to(vectors.dtype)
 
+        even_features = None
+        odd_bases = None
+        if self.spin_feature_mode == "even_pair":
+            even_features, odd_bases = self._compute_spin_features(data, lengths)
         node_feats = self.node_embedding(data["node_attrs"])
-        node_feats = self._apply_initial_magmom_film(node_feats, data)
+        node_feats = self._apply_initial_magmom_film(node_feats, data, even_features)
         edge_attrs = self.spherical_harmonics(vectors)
         edge_feats, cutoff = self.radial_embedding(
             lengths,
@@ -325,6 +406,14 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
                 cell=cell,
             )
 
+        if getattr(self, "predict_magmom", True):
+            magmom_values = self._readout_magmom(node_feats_list)
+            if self.spin_feature_mode == "even_pair":
+                # Even coefficients times odd magnetic bases -> strictly odd readout.
+                magmom_values = torch.sum(magmom_values * odd_bases, dim=-1)
+        else:
+            magmom_values = None
+
         return {
             "energy": total_energy,
             "node_energy": node_energy,
@@ -338,7 +427,7 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
             "hessian": hessian,
             "displacement": displacement,
             "node_feats": node_feats_out,
-            "magmom": self._readout_magmom(node_feats_list),
+            "magmom": magmom_values,
         }
 
     def forward(
@@ -354,14 +443,41 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
         compute_atomic_stresses: bool = False,
         lammps_mliap: bool = False,
     ) -> Dict[str, Optional[torch.Tensor]]:
-        """Evaluate MACE with optional even magnetic conditioning.
-
-        ``enforce_spin_inversion`` averages FiLM conditioning features from
-        ``m`` and ``-m`` before message passing. The expensive equivariant
-        message passing is still evaluated once, so the energy is even under
-        global magnetic-seed reversal and the force remains its gradient.
-        """
-        return self._forward_single(
+        """Evaluate with optional full-network global spin-inversion symmetry."""
+        if self.spin_feature_mode == "even_pair":
+            # One forward; even FiLM inputs ensure E,F are globally spin-inversion even.
+            return self._forward_single(
+                data,
+                training=training,
+                compute_force=compute_force,
+                compute_virials=compute_virials,
+                compute_stress=compute_stress,
+                compute_displacement=compute_displacement,
+                compute_hessian=compute_hessian,
+                compute_edge_forces=compute_edge_forces,
+                compute_atomic_stresses=compute_atomic_stresses,
+                lammps_mliap=lammps_mliap,
+            )
+        if not self.enforce_spin_inversion:
+            return self._forward_single(
+                data,
+                training=training,
+                compute_force=compute_force,
+                compute_virials=compute_virials,
+                compute_stress=compute_stress,
+                compute_displacement=compute_displacement,
+                compute_hessian=compute_hessian,
+                compute_edge_forces=compute_edge_forces,
+                compute_atomic_stresses=compute_atomic_stresses,
+                lammps_mliap=lammps_mliap,
+            )
+        if self.magmom_key not in data:
+            raise KeyError(
+                f"Missing atom-wise magnetic initialization field {self.magmom_key!r}."
+            )
+        inverted = dict(data)
+        inverted[self.magmom_key] = -data[self.magmom_key]
+        positive = self._forward_single(
             data,
             training=training,
             compute_force=compute_force,
@@ -373,3 +489,25 @@ class MACEInitialMagmomFiLM(ScaleShiftMACE):
             compute_atomic_stresses=compute_atomic_stresses,
             lammps_mliap=lammps_mliap,
         )
+        negative = self._forward_single(
+            inverted,
+            training=training,
+            compute_force=compute_force,
+            compute_virials=compute_virials,
+            compute_stress=compute_stress,
+            compute_displacement=compute_displacement,
+            compute_hessian=compute_hessian,
+            compute_edge_forces=compute_edge_forces,
+            compute_atomic_stresses=compute_atomic_stresses,
+            lammps_mliap=lammps_mliap,
+        )
+        output = {}
+        for key, value in positive.items():
+            other = negative.get(key)
+            if key == "magmom" and torch.is_tensor(value) and torch.is_tensor(other):
+                output[key] = 0.5 * (value - other)
+            elif torch.is_tensor(value) and torch.is_tensor(other):
+                output[key] = 0.5 * (value + other)
+            else:
+                output[key] = value
+        return output

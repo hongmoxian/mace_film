@@ -11,3 +11,6 @@ slurm-*.out
 *_film_pes-*.out
 wandb/
 .DS_Store
+
+.baseline_*.json
+.integrated_*.json

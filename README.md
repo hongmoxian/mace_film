@@ -116,16 +116,48 @@ moments. MD can optionally feed predicted moments into the next step with
 `--rollout-magmom`; PES examples keep the supplied branch template fixed
 unless explicitly configured otherwise.
 
-The optional `--enforce-spin-inversion` switch constructs an even FiLM
-conditioning feature from globally reversed magnetic seeds:
+### Optional single-forward magnetic-reversal symmetry
 
-```text
-h_even(m) = [h(m) + h(-m)] / 2
-E(R, m) = E(R, -m)
-```
+Default (--spin-feature-mode legacy): original signed-moment MACE-FiLM.
+All pretrained examples in this repository use the original architecture.
+The optional symmetry mode was not enabled for the main-manuscript PES
+or MD calculations.
 
-The switch is disabled by default. The released checkpoints and reported
-paper calculations therefore retain their original behavior.
+Opt-in (--spin-feature-mode even_pair): the model constructs the magnetic
+descriptor q_i = (s_i^2, s_i * sbar_i), where s_i is the normalized
+local moment and sbar_i is a distance-weighted average of neighboring
+magnetically conditioned moments. The two FiLM inputs are even under
+global spin reversal; the neighbor correlation term can distinguish
+different relative magnetic alignments (FM vs AFM).
+A two-coefficient odd-moment readout uses the bases (s_i, sbar_i).
+For even_pair:
+
+- E(R, m) = E(R, -m).
+- F(R, m) = F(R, -m), at fixed magnetic conditioning inputs.
+- m_pred(R, -m) = -m_pred(R, m).
+
+The symmetry-preserving mode uses ONE forward pass, not feature averaging
+over positive/negative magnetic initializations. It is opt-in.
+
+Example new training options:
+
+    --spin-feature-mode even_pair
+    --conditioning-mode film
+    --magmom-condition-elements Fe O
+    --magmom-supervise-elements Fe O
+    --total-magmom-w 0
+
+At present, the even_pair option is integrated into the primary FeN4
+model/training entry points. The system-specific Mn-Au-O2 and CeO2 model
+copies still use their original implementations.
+
+The new mode requires newly trained weights: the FiLM input dimension
+and the magnetic-moment readout head differ from legacy checkpoints.
+Do not force-load legacy weights as an even_pair model.
+
+The historical --enforce-spin-inversion flag is separate and cannot
+be combined with even_pair. See docs/INTEGRATION_NOTES_20261030.md
+for migration details and verification status.
 
 ## Scope of this release
 
