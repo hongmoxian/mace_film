@@ -4,8 +4,8 @@ MACE-FiLM conditions a MACE potential on atom-resolved initial magnetic
 moments and predicts energies, forces, and local magnetic moments. This
 repository is a compact, code-oriented release: it contains the model and
 training implementations, portable ASE MD/PES examples, the checkpoints
-needed by those examples, and the workflow figure. Full paper figures and
-their processed plotting tables are intentionally not mirrored here.
+needed by those examples, and the workflow figure. Details about included
+example data and reproducibility are in [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md).
 
 ![MagPES-MACE workflow including optional global magnetic-reversal symmetry](figures/workflow.png)
 
@@ -214,23 +214,27 @@ magnetic-state update work and prevents stale ASE energy/force caches.
 Do not load untrusted PyTorch checkpoints. Preserve the same DFT
 local-moment projection convention at training and prediction time.
 
-## Scope of this release
+## Data availability
 
-Removed from this GitHub repository:
+This repository provides compact training-schema samples and selected example
+checkpoints, rather than the full datasets used for the paper. See
+[DATA_AVAILABILITY.md](DATA_AVAILABILITY.md) for details and
+[MANIFEST.csv](MANIFEST.csv) for the included files and SHA256 checksums.
 
+<!-- Maintainer comment: release curation (not shown in the rendered README).
+Removed from the GitHub software release:
 - paper PES/MD/statistical figures other than Figure 1;
 - figure-data CSV files;
 - full production training datasets;
 - raw VASP outputs and full AIMD/ML-MD trajectories;
 - exploratory checkpoints, training histories, and duplicated metadata.
 
-The single optional even_pair pretrained example is included explicitly
-for testing the symmetry extension. The downloadable samples do not
-replace the full scientific training sets.
-
-Complete paper data should be deposited separately in a persistent research
-data archive. See `DATA_AVAILABILITY.md` and `MANIFEST.csv` for the retained
-release contents and checksums.
+The optional even_pair pretrained example is retained for testing the symmetry
+extension; tiny schema samples are not substitutes for scientific training sets.
+Complete paper datasets should be archived separately in a persistent research
+data repository. The retained contents and checksums are documented in
+DATA_AVAILABILITY.md and MANIFEST.csv.
+-->
 
 ## License and attribution
 
