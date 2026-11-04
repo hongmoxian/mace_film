@@ -18,8 +18,8 @@ from run_md_mace_film import MACEFilmMDCalculator
 
 out = {}
 for suffix, reference in (
-    ("md_spp_previous_best", "atomic_energy_linref_md.json"),
-    ("pes_afm_energy10_best", "atomic_energy_linref_pes.json"),
+    ("md_mhc", "reference_energies_md.json"),
+    ("pes", "reference_energies_pes.json"),
 ):
     frame = read(str(root / "examples/fen4/inputs/afm_template.extxyz"), index=0)
     model = MACEFilmMDCalculator(

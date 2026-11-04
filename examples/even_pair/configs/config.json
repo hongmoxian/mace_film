@@ -26,7 +26,7 @@
     "O"
   ],
   "loss_type": "l1",
-  "atomic_energy_linref": "examples/even_pair/inputs/atomic_energy_linref.json",
+  "atomic_energy_linref": "examples/even_pair/inputs/reference_energies.json",
   "use_zbl": false,
   "conditioning_mode": "film",
   "no_magmom_head": false,

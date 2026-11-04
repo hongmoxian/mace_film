@@ -644,7 +644,7 @@ def main() -> None:
     parser.add_argument("--s2-rule", default="54*0.1 1*2 4*0 2*1")
     parser.add_argument(
         "--scan-frame-pattern",
-        default="/home/wuzhihong/software/ocp_mag/data/fe_o2_scan_initial_fixbond_opt/{state}/d_{distance}/ase_fixbond_opt/OUTCAR",
+        default="data/scans/{state}/d_{distance}/OUTCAR",
         help=(
             "Path pattern used by --init-magmom-mode scan_frame. Available fields: "
             "{state}/{branch}=S0 or S2, {distance}=%%.2f, {distance_short}=%%.1f."
@@ -662,7 +662,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--scan-structure-pattern",
-        default="/home/wuzhihong/software/ocp_mag/data/fe_o2_scan_initial_fixbond_opt/{state}/d_{distance}/ase_fixbond_opt/source_structure.vasp",
+        default="data/scans/{state}/d_{distance}/source_structure.vasp",
         help=(
             "Path pattern used by --scan-structure-mode opt_source_structure. "
             "Available fields: {state}/{branch}=S0 or S2, {distance}=%%.2f, "

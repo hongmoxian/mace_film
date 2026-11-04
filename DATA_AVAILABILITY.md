@@ -1,43 +1,14 @@
-# Data availability
+# Data and software availability
 
-This GitHub repository is a compact software and model release. It includes:
+The model implementation, example inputs, and demonstration checkpoints
+are available in this repository. Each example contains a small labeled
+sample that illustrates the expected data format.
 
-- the MACE-FiLM model and training implementations;
-- portable ASE MD and constrained-PES scripts;
-- the checkpoints used by the retained examples;
-- small structures, atomic-energy references, and training-schema samples;
-- the paper workflow figure (Figure 1).
+The complete research datasets, computational input files, and supporting
+simulation results are distributed separately from the source code.
+A persistent data archive link will be provided when deposition is complete.
 
-It intentionally excludes the full production datasets, raw VASP outputs,
-complete AIMD/ML-MD trajectories, processed paper plotting tables, and all
-paper figures other than the workflow. Those research artifacts should be
-deposited in a persistent data repository rather than duplicated in the
-software repository.
+The included examples are not a substitute for the complete research
+data needed to reproduce the quantitative results in the manuscript.
 
-The `.extxyz.gz` files under `examples/*/inputs/` contain only a few frames
-for inspecting the required arrays and metadata. They are not statistically
-representative datasets and cannot reproduce reported training or paper
-metrics.
-
-`MANIFEST.csv` records the size and SHA256 checksum of every retained file.
-
-## Optional symmetry extension example
-
-The repository also includes one FeN4/O2 fixed-geometry example, a
-configuration with redacted/portable data paths and a trained
-single-forward even_pair checkpoint under examples/even_pair/. These
-assets support a quick property test of global magnetic reversal but
-do not reproduce the scientific training results. Optional symmetry
-was not enabled for the primary paper MD/PES calculations.
-
-The updated architecture diagram is in figures/workflow.png with its
-editable SVG and reproducible rendering script also provided.
-
-## Licensing of repository assets
-
-The original source code, examples, documentation, and workflow
-illustrations distributed by the MACE-FiLM maintainers are provided
-under the repository's MIT License, to the extent the maintainers hold
-the required distribution and licensing rights. External dependencies
-and any third-party materials retain their own terms; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+File integrity checksums are listed in MANIFEST.csv.

@@ -7,9 +7,9 @@ from ase.io import read
 root = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'mace_film'))
 from run_md_mace_film import MACEFilmMDCalculator
-ckpt=root/'examples/even_pair/models/best.pt'
-ref=str(root/'examples/even_pair/inputs/atomic_energy_linref.json')
-initial=read(str(root/'examples/even_pair/inputs/first_real_frame.extxyz'),0)
+ckpt=root/'examples/even_pair/models/model.pt'
+ref=str(root/'examples/even_pair/inputs/reference_energies.json')
+initial=read(str(root/'examples/even_pair/inputs/structure.extxyz'),0)
 m=np.asarray(initial.arrays['initial_magmom'],dtype=float)
 def evaluate(mom):
  atoms=initial.copy()
